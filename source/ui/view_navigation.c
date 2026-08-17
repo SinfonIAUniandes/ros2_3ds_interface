@@ -8,23 +8,38 @@ static void menu_row(ui_context *ui, float y, const char *title, const char *det
 }
 
 void ui_view_services_top(ui_context *ui, const ui_snapshot *snapshot) {
-    (void)snapshot;
-    ui_header(ui, "Services", "Reserved for future modules");
+    ui_header(ui, "Services", "Server registry");
     ui_panel(ui, 8, 58, 384, 164);
-    ui_text(ui, 22, 78, 0.52f, ui->theme.text, "No services registered");
-    ui_text(ui, 22, 110, 0.38f, ui->theme.muted, "Service clients and servers will appear here.");
-    ui_text(ui, 22, 134, 0.38f, ui->theme.muted, "The tab is already part of the navigation system,");
-    ui_text(ui, 22, 158, 0.38f, ui->theme.muted, "so adding a module does not change the UI structure.");
-    ui_badge(ui, 22, 188, "PLANNED", true);
+    ui_rect(8, 58, 5, 164, snapshot->add_two_ints_running ? ui->theme.success : ui->theme.danger);
+    ui_text(ui, 22, 76, 0.50f, ui->theme.text, "/add_two_ints");
+    ui_text(ui, 22, 101, 0.35f, ui->theme.muted, "example_interfaces/srv/AddTwoInts");
+    ui_badge(ui, 310, 74, snapshot->add_two_ints_running ? "READY" : "OFF", snapshot->add_two_ints_running);
+    ui_textf(ui, 22, 134, 0.40f, ui->theme.text, "Requests handled  %llu",
+             (unsigned long long)snapshot->add_two_ints_requests_handled);
+    ui_textf(ui, 22, 162, 0.40f, ui->theme.accent, "%lld + %lld = %lld",
+             (long long)snapshot->add_two_ints_last_a,
+             (long long)snapshot->add_two_ints_last_b,
+             (long long)snapshot->add_two_ints_last_sum);
+    ui_textf(ui, 22, 195, 0.33f, ui->theme.muted, "Request match %ld  |  Reply match %ld",
+             (long)snapshot->add_two_ints_request_matches,
+             (long)snapshot->add_two_ints_response_matches);
 }
 
 void ui_view_services_bottom(ui_context *ui, const ui_snapshot *snapshot) {
     (void)snapshot;
     const ui_controls *controls = app_ui_controls();
-    ui_text(ui, 8, 45, 0.47f, ui->theme.text, "Service workspace");
-    ui_panel(ui, 8, 70, 304, 76);
-    ui_text(ui, 18, 83, 0.34f, ui->theme.muted, "Future module slots");
-    ui_text(ui, 18, 108, 0.39f, ui->theme.text, "Clients  |  Servers  |  Requests");
+    ui_text(ui, 8, 45, 0.47f, ui->theme.text, "Add two integers server");
+    ui_panel(ui, 8, 70, 304, 112);
+    ui_text(ui, 18, 83, 0.34f, ui->theme.muted, "Call from ROS 2");
+    ui_text(ui, 18, 106, 0.33f, ui->theme.text, "ros2 service call /add_two_ints");
+    ui_text(ui, 18, 126, 0.33f, ui->theme.text, "example_interfaces/srv/AddTwoInts");
+    ui_text(ui, 18, 146, 0.33f, ui->theme.text, "\"{a: 2, b: 3}\"");
+    ui_textf(ui, 18, 166, 0.31f, ui->theme.muted, "Taken %llu  |  Replies %llu",
+             (unsigned long long)snapshot->add_two_ints_samples_taken,
+             (unsigned long long)snapshot->add_two_ints_responses_written);
+    ui_textf(ui, 18, 184, 0.31f, ui->theme.muted, "Take rc %ld  |  Write rc %ld",
+             (long)snapshot->add_two_ints_last_take_result,
+             (long)snapshot->add_two_ints_last_write_result);
     ui_textf(ui, 8, 218, 0.34f, ui->theme.muted, "%s/%s switch main tabs",
              app_ui_control_label(controls->previous_view), app_ui_control_label(controls->next_view));
 }

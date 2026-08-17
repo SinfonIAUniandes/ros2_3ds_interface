@@ -21,7 +21,8 @@ void ros2_graph_init(ros2_graph *graph);
 bool ros2_graph_start(ros2_graph *graph, dds_entity_t participant);
 bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
                         dds_entity_t chatter_writer, dds_entity_t chatter_reader,
-                        dds_entity_t imu_writer);
+                        dds_entity_t imu_writer, dds_entity_t service_request_reader,
+                        dds_entity_t service_response_writer);
 int32_t ros2_graph_writer_matches(ros2_graph *graph);
 void ros2_graph_stop(ros2_graph *graph);
 

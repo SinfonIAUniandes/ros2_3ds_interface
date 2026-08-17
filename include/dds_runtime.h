@@ -10,6 +10,7 @@
 #include "ros2_chatter.h"
 #include "ros2_graph.h"
 #include "ros2_imu.h"
+#include "ros2_add_two_ints.h"
 
 typedef void (*dds_runtime_log_fn)(void *context, int level, const char *message);
 
@@ -21,6 +22,7 @@ typedef struct {
     ros2_chatter chatter;
     ros2_graph graph;
     ros2_imu imu;
+    ros2_add_two_ints add_two_ints;
 } dds_runtime;
 
 void dds_runtime_init(dds_runtime *runtime);
@@ -32,12 +34,17 @@ void dds_runtime_stop(dds_runtime *runtime);
 bool dds_runtime_publish_chatter(dds_runtime *runtime, const char *data);
 bool dds_runtime_refresh_graph(dds_runtime *runtime);
 bool dds_runtime_publish_imu(dds_runtime *runtime, uint64_t timestamp_ms);
+int32_t dds_runtime_process_services(dds_runtime *runtime);
 int32_t dds_runtime_poll_chatter(dds_runtime *runtime, ros2_chatter_receive_fn callback, void *context);
 uint64_t dds_runtime_chatter_transmitted(const dds_runtime *runtime);
 uint64_t dds_runtime_chatter_received(const dds_runtime *runtime);
 uint64_t dds_runtime_graph_published(const dds_runtime *runtime);
 uint64_t dds_runtime_imu_transmitted(const dds_runtime *runtime);
 int32_t dds_runtime_imu_writer_matches(dds_runtime *runtime);
+int32_t dds_runtime_add_two_ints_request_matches(dds_runtime *runtime);
+int32_t dds_runtime_add_two_ints_response_matches(dds_runtime *runtime);
+int32_t dds_runtime_add_two_ints_request_incompatible_qos(dds_runtime *runtime,
+                                                          uint32_t *last_policy_id);
 void dds_runtime_socket_stats(ddsrt_3ds_socket_stats_t *stats);
 int32_t dds_runtime_chatter_writer_matches(dds_runtime *runtime);
 int32_t dds_runtime_chatter_reader_matches(dds_runtime *runtime);

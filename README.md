@@ -5,8 +5,9 @@ connects directly to DDS over Wi-Fi, publishes and receives
 `std_msgs/msg/String` on `/chatter`, streams `sensor_msgs/msg/Imu` on
 `/imu/data_raw`, and appears in the ROS 2 graph without an agent or bridge.
 
-Bidirectional communication has been validated with ROS 2 Jazzy and
-`rmw_cyclonedds_cpp` on Windows.
+The primary compatibility target is native Ubuntu with ROS 2 Jazzy and
+`rmw_cyclonedds_cpp`. Native Windows remains supported on a best-effort basis,
+but it is not the reference environment for discovery debugging.
 
 ## Requirements
 
@@ -32,17 +33,7 @@ That specific fork is required when building from source.
 3. Confirm that the top screen reports `DDS RUNNING`.
 4. Start a ROS 2 process on a computer connected to the same LAN.
 
-PowerShell:
-
-```powershell
-$env:ROS_DOMAIN_ID = "0"
-$env:RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
-Remove-Item Env:CYCLONEDDS_URI -ErrorAction SilentlyContinue
-ros2 daemon stop
-ros2 topic echo /chatter std_msgs/msg/String
-```
-
-Linux:
+Ubuntu reference setup:
 
 ```sh
 export ROS_DOMAIN_ID=0
@@ -51,6 +42,22 @@ unset CYCLONEDDS_URI
 ros2 daemon stop
 ros2 topic echo /chatter std_msgs/msg/String
 ```
+
+PowerShell, best effort:
+
+```powershell
+$env:ROS_DOMAIN_ID = "0"
+$env:RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
+Remove-Item Env:CYCLONEDDS_URI -ErrorAction SilentlyContinue
+ros2 pkg prefix rmw_cyclonedds_cpp
+ros2 daemon stop
+ros2 doctor --report | Select-String -Pattern "middleware|rmw"
+ros2 topic echo /chatter std_msgs/msg/String
+```
+
+Run every ROS command from that same PowerShell session. If
+`rmw_cyclonedds_cpp` is unavailable in the Pixi environment, use native Ubuntu
+for service testing rather than falling back to Fast DDS.
 
 Press **A** on the 3DS. The computer should receive a `Hello from 3DS`
 message.
@@ -70,10 +77,15 @@ ros2 topic echo /imu/data_raw sensor_msgs/msg/Imu
 ros2 topic hz /imu/data_raw
 ```
 
+To call the built-in service:
+
+```sh
+ros2 service list -t
+ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
+```
+
 ## Controls
 
-| Button | Action |
-| --- | --- |
 | Default binding | Action |
 | --- | --- |
 | A | Publish every enabled topic once from Home; enable or disable the selected Topic |
@@ -106,6 +118,10 @@ WSL2 in its default NAT mode is not expected to participate directly in LAN
 DDS discovery. Use native Windows ROS 2, mirrored networking, or a native Linux
 host instead.
 
+Fast DDS can discover the node and topics, but its ROS service request/reply
+mapping is not currently implemented by the 3DS server. Service tests require
+`rmw_cyclonedds_cpp` on the host.
+
 ## Build From Source
 
 Building requires devkitPro/devkitARM, libctru, CMake, and the
@@ -128,6 +144,7 @@ Start with the [documentation index](docs/README.md).
 
 - `/chatter` publisher and subscriber using `std_msgs/msg/String`
 - `/imu/data_raw` publisher using `sensor_msgs/msg/Imu`
+- `/add_two_ints` server using `example_interfaces/srv/AddTwoInts`
 - ROS 2 graph publication for the 3DS node and endpoints
 - IPv4 UDP transport on the local network
 - Multicast, subnet-broadcast, and optional static-peer discovery
@@ -136,5 +153,8 @@ Start with the [documentation index](docs/README.md).
 See [IMU streaming](docs/features/imu-streaming.md) for units, frame semantics,
 frequency, and calibration details.
 
-Services, actions, IPv6, DDS Security, and routed discovery are not currently
-implemented.
+See [AddTwoInts service](docs/features/add-two-ints-service.md) for the service
+wire mapping and validation steps.
+
+Actions, parameters, lifecycle nodes, IPv6, DDS Security, and routed discovery
+are not currently implemented.

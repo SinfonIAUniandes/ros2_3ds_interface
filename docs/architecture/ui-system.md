@@ -10,7 +10,7 @@ the bottom screen provides navigation, controls, or deeper context.
 | --- | --- |
 | Home | Connection health, DDS state, chatter totals, and primary actions |
 | Topics | Registered topics, endpoint matches, QoS, counters, and message previews |
-| Services | Reserved workspace for future clients and servers |
+| Services | Registered servers, endpoint matches, request totals, and latest result |
 | Menu | Entry point for Details, Logs, and Settings |
 | Details | Network, discovery, RTPS, probe, QoS, and error diagnostics |
 | Logs | Recent structured events and the persistent SD log path |

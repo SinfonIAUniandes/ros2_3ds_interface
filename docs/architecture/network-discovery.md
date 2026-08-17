@@ -10,6 +10,7 @@ Cyclone DDS then sends SPDP announcements to:
 
 - the standard DDS multicast group `239.255.0.1`
 - the calculated IPv4 subnet broadcast address
+- the calculated subnet broadcast on participant-index discovery ports
 
 The subnet-broadcast destination uses the DDS metatraffic multicast port:
 
@@ -20,6 +21,19 @@ $$
 A multicast-enabled DDS participant normally binds this port. When it receives
 the undirected SPDP announcement, it can reply to the unicast locator advertised
 by the 3DS. SEDP and user data then travel over unicast.
+
+The automatic peer is also configured without an explicit port. Cyclone expands
+it across participant indexes 0 through 9 (`7410`, `7412`, and so on for domain
+0). This discovers short-lived processes such as `ros2 service call` even when a
+separate ROS daemon already occupies participant index 0 or multicast delivery
+is asymmetric.
+
+On Nintendo 3DS, the Cyclone port also learns the IPv4 source of every accepted
+LAN participant. The host is retained as a persistent SPDP peer and expanded
+across the same participant-index ports. Once a long-lived ROS daemon or node is
+discovered, later short-lived CLI and service-client processes on that computer
+can be discovered by unicast without embedding the computer address in the
+application.
 
 The broadcast bootstrap is an IPv4 local-subnet compatibility mechanism, not a
 routed DDS discovery protocol. It does not cross routers or VLANs.

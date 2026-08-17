@@ -32,6 +32,8 @@ Use these pages when operating or changing the project:
 
 - [IMU streaming](features/imu-streaming.md): sensor lifecycle, standard ROS
   message mapping, units, calibration, and validation
+- [AddTwoInts service](features/add-two-ints-service.md): request/reply mapping,
+  UI state, and ROS 2 validation
 
 ## Suggested Paths
 

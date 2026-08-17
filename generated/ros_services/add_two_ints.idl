@@ -1,0 +1,19 @@
+module example_interfaces {
+  module srv {
+    module dds_ {
+      // guid and seq are the rmw_cyclonedds_cpp request header.
+      struct AddTwoInts_Request_ {
+        uint64 guid;
+        int64 seq;
+        int64 a;
+        int64 b;
+      };
+
+      struct AddTwoInts_Response_ {
+        uint64 guid;
+        int64 seq;
+        int64 sum;
+      };
+    };
+  };
+};

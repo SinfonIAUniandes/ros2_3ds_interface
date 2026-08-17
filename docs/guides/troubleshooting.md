@@ -73,6 +73,22 @@ ROS command-line processes create short-lived DDS participants. Match counts
 can return to zero when `ros2 topic echo`, `ros2 topic pub`, or the ROS daemon
 exits or restarts.
 
+### Service endpoints match but requests do not deserialize
+
+Check the vendor ID in the 3DS session log. `vendor 1.15` is eProsima Fast DDS;
+`vendor 1.16` is Eclipse Cyclone DDS. The current AddTwoInts server supports the
+`rmw_cyclonedds_cpp` request/reply mapping only. Fast DDS may still discover the
+node, topics, and service graph even though service calls are incompatible.
+
+Verify the selected RMW in the same shell that launches the client:
+
+```sh
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+ros2 pkg prefix rmw_cyclonedds_cpp
+ros2 daemon stop
+ros2 doctor --report | grep -Ei 'middleware|rmw'
+```
+
 ### WSL2 cannot discover the 3DS
 
 Default WSL2 networking is NATed and does not expose DDS multicast or broadcast

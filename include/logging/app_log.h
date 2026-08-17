@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define APP_LOG_MESSAGE_SIZE 192
+#define APP_LOG_MESSAGE_SIZE 384
 
 typedef enum {
     APP_LOG_DEBUG,

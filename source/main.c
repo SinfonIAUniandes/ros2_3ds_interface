@@ -24,7 +24,7 @@
 #define STATUS_REFRESH_MS 500
 #define GRAPH_REFRESH_MS 5000
 #define RTPS_LOG_INTERVAL_MS 5000
-#define APP_BUILD_ID "20260816-topic-controls"
+#define APP_BUILD_ID "20260817-service-cdr-diagnostics"
 #define DEFAULT_IMU_PUBLISH_HZ 50
 #define DEFAULT_IMU_ACCEL_SCALE (9.80665 / 512.0)
 
@@ -349,6 +349,9 @@ int main(void) {
     int32_t last_writer_qos_rejections = -2;
     int32_t last_reader_qos_rejections = -2;
     int32_t last_imu_matches = -2;
+    int32_t last_service_request_matches = -2;
+    int32_t last_service_response_matches = -2;
+    int32_t last_service_request_qos_rejections = -2;
     int32_t last_send_errno = 0;
     int32_t last_recv_errno = 0;
     int32_t last_multicast_if_errno = 0;
@@ -359,7 +362,7 @@ int main(void) {
             app_log_write(APP_LOG_INFO, "DDS discovery: multicast + subnet broadcast %s",
                           broadcast_ip_text);
         }
-        app_log_write(APP_LOG_INFO, "DDS compatibility: RTPS 2.1");
+        app_log_write(APP_LOG_INFO, "DDS compatibility: Cyclone DDS defaults");
         bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                          broadcast_ip_text, config.imu_enabled,
                                          config.imu_acceleration_scale);
@@ -372,6 +375,10 @@ int main(void) {
                           (unsigned long)dds.imu.accelerometer_result,
                           (unsigned long)dds.imu.gyroscope_result,
                           (unsigned long)dds.imu.coefficient_result);
+        }
+        if (started && !dds.add_two_ints.running) {
+            app_log_write(APP_LOG_WARN, "AddTwoInts service unavailable rc=%ld",
+                          (long)dds.add_two_ints.last_result);
         }
     }
 
@@ -533,6 +540,42 @@ int main(void) {
         if (chatter_listening) {
             dds_runtime_poll_chatter(&dds, chatter_receive_callback, last_received_message);
         }
+        int32_t handled_requests = dds_runtime_process_services(&dds);
+        if (handled_requests < 0) {
+            app_log_write(APP_LOG_ERROR, "AddTwoInts processing failed %s", dds_runtime_error_text(&dds));
+        } else if (handled_requests > 0) {
+            app_log_write(APP_LOG_INFO, "AddTwoInts %lld + %lld = %lld seq=%lld guid=%08llx",
+                          (long long)dds.add_two_ints.last_a,
+                          (long long)dds.add_two_ints.last_b,
+                          (long long)dds.add_two_ints.last_sum,
+                          (long long)dds.add_two_ints.last_request_seq,
+                          (unsigned long long)dds.add_two_ints.last_request_guid);
+        }
+        int32_t service_request_matches = dds_runtime_add_two_ints_request_matches(&dds);
+        if (service_request_matches != last_service_request_matches) {
+            app_log_write(APP_LOG_INFO, "AddTwoInts request match count=%ld",
+                          (long)service_request_matches);
+            last_service_request_matches = service_request_matches;
+        }
+        int32_t service_response_matches = dds_runtime_add_two_ints_response_matches(&dds);
+        if (service_response_matches != last_service_response_matches) {
+            app_log_write(APP_LOG_INFO, "AddTwoInts response match count=%ld",
+                          (long)service_response_matches);
+            last_service_response_matches = service_response_matches;
+        }
+        uint32_t service_request_qos_policy = 0;
+        int32_t service_request_qos_rejections =
+            dds_runtime_add_two_ints_request_incompatible_qos(
+                &dds, &service_request_qos_policy);
+        if (service_request_qos_rejections != last_service_request_qos_rejections) {
+            if (service_request_qos_rejections > 0) {
+                app_log_write(APP_LOG_WARN,
+                              "AddTwoInts request incompatible QoS count=%ld policy=%lu",
+                              (long)service_request_qos_rejections,
+                              (unsigned long)service_request_qos_policy);
+            }
+            last_service_request_qos_rejections = service_request_qos_rejections;
+        }
 
         if (now >= next_status_at) {
             dds_runtime_socket_stats(&socket_stats);
@@ -625,6 +668,20 @@ int main(void) {
                 dds.imu.last_linear_acceleration[0], dds.imu.last_linear_acceleration[1],
                 dds.imu.last_linear_acceleration[2]
             },
+            .add_two_ints_running = dds.add_two_ints.running,
+            .add_two_ints_requests_handled = dds.add_two_ints.requests_handled,
+            .add_two_ints_request_matches = service_request_matches,
+            .add_two_ints_response_matches = service_response_matches,
+            .add_two_ints_last_a = dds.add_two_ints.last_a,
+            .add_two_ints_last_b = dds.add_two_ints.last_b,
+            .add_two_ints_last_sum = dds.add_two_ints.last_sum,
+            .add_two_ints_take_calls = dds.add_two_ints.take_calls,
+            .add_two_ints_samples_taken = dds.add_two_ints.samples_taken,
+            .add_two_ints_responses_written = dds.add_two_ints.responses_written,
+            .add_two_ints_last_guid = dds.add_two_ints.last_request_guid,
+            .add_two_ints_last_seq = dds.add_two_ints.last_request_seq,
+            .add_two_ints_last_take_result = dds.add_two_ints.last_take_result,
+            .add_two_ints_last_write_result = dds.add_two_ints.last_write_result,
             .rtps_tx_multicast = socket_stats.tx_multicast,
             .rtps_tx_unicast = socket_stats.tx_unicast,
             .rtps_rx_total = socket_stats.rx_total,
