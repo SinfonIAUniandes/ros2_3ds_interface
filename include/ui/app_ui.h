@@ -7,10 +7,13 @@
 #include <stdint.h>
 
 typedef enum {
-    UI_VIEW_OVERVIEW,
+    UI_VIEW_HOME,
     UI_VIEW_TOPICS,
-    UI_VIEW_DIAGNOSTICS,
+    UI_VIEW_SERVICES,
+    UI_VIEW_MENU,
+    UI_VIEW_DETAILS,
     UI_VIEW_LOGS,
+    UI_VIEW_SETTINGS,
     UI_VIEW_COUNT
 } ui_view_id;
 
@@ -20,8 +23,28 @@ typedef enum {
     UI_ACTION_TOGGLE_PUBLISHING = 1u << 1,
     UI_ACTION_TOGGLE_LISTENER = 1u << 2,
     UI_ACTION_SEND_PROBE = 1u << 3,
-    UI_ACTION_EXIT = 1u << 4
+    UI_ACTION_EXIT = 1u << 4,
+    UI_ACTION_NEXT_VIEW = 1u << 5,
+    UI_ACTION_PREVIOUS_VIEW = 1u << 6,
+    UI_ACTION_NEXT_ITEM = 1u << 7,
+    UI_ACTION_PREVIOUS_ITEM = 1u << 8,
+    UI_ACTION_ACTIVATE = 1u << 9,
+    UI_ACTION_BACK = 1u << 10
 } ui_action;
+
+typedef struct {
+    u32 publish_once;
+    u32 toggle_publishing;
+    u32 toggle_listener;
+    u32 send_probe;
+    u32 exit;
+    u32 next_view;
+    u32 previous_view;
+    u32 next_item;
+    u32 previous_item;
+    u32 activate;
+    u32 back;
+} ui_controls;
 
 typedef struct {
     const char *build_id;
@@ -31,6 +54,8 @@ typedef struct {
     const char *peer_ip;
     const char *last_probe_sender;
     const char *last_probe_payload;
+    const char *last_published_message;
+    const char *last_received_message;
     const char *dds_status;
     const char *dds_error;
     const char *log_path;
@@ -84,5 +109,7 @@ void app_ui_exit(void);
 ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch);
 void app_ui_render(const ui_snapshot *snapshot);
 ui_view_id app_ui_current_view(void);
+const ui_controls *app_ui_controls(void);
+const char *app_ui_control_label(u32 mask);
 
 #endif

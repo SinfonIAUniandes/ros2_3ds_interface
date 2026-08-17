@@ -9,13 +9,18 @@ the bottom screen provides navigation, controls, or deeper context.
 | View | Purpose |
 | --- | --- |
 | Home | Connection health, DDS state, chatter totals, and primary actions |
-| Topics | Registered topics, endpoint matches, QoS, and sample counters |
+| Topics | Registered topics, endpoint matches, QoS, counters, and message previews |
+| Services | Reserved workspace for future clients and servers |
+| Menu | Entry point for Details, Logs, and Settings |
 | Details | Network, discovery, RTPS, probe, QoS, and error diagnostics |
 | Logs | Recent structured events and the persistent SD log path |
+| Settings | Active button bindings and theme/control configuration paths |
 
-Use `L` and `R` or touch the bottom tabs to change views. Runtime actions remain
-available through `A`, `B`, `Y`, and `X`; the Home view also exposes touch
-buttons for them.
+The bottom navigation exposes the four primary tabs: Home, Topics, Services,
+and Menu. Use the configured previous/next tab buttons or touch a tab. Menu
+contains secondary screens and uses configured item navigation and activation.
+Runtime actions are intentionally active only from Home, which prevents a
+navigation button from triggering a hidden DDS operation on another screen.
 
 ## File Layout
 
@@ -28,9 +33,12 @@ source/ui/
   app_ui.c             Citro2D lifecycle, navigation, and view registry
   ui_draw.c            Shared text, panel, badge, metric, and button primitives
   ui_theme.c           Defaults and INI theme loader
+  ui_controls.c        INI controller-binding parser
+  ui_topics_registry.c Topic declarations independent of renderers
   ui_internal.h        Private view contracts
   view_overview.c      Home dashboard
   view_topics.c        Topic list and topic detail
+  view_navigation.c    Services, Menu, and Settings views
   view_diagnostics.c   Deep runtime diagnostics
   view_logs.c          Structured event log
 ```
@@ -54,16 +62,19 @@ replace.
 4. Declare the functions in `source/ui/ui_internal.h`.
 5. Add one entry to `ui_views` in `source/ui/app_ui.c`.
 
-Navigation and touch tabs are generated from the registry and `UI_VIEW_COUNT`.
+Primary tabs are deliberately declared in `app_ui.c`; secondary views are
+reachable through Menu. This keeps the bottom navigation stable as features
+grow.
 
 ## Adding Topics or Services
 
 Runtime ownership should remain outside the UI:
 
 1. Implement the topic or service in its own runtime module.
-2. Add only the required summary fields to `ui_snapshot`.
-3. Expose operations as new `ui_action` bits.
-4. Render the module in the Topics view or add a dedicated registered view.
+2. Add a `ui_topic_definition` entry in `ui_topics_registry.c` for each topic.
+3. Add only the required counters and message previews to `ui_snapshot`.
+4. Expose operations as new `ui_action` bits.
+5. Render the module in Topics, Services, or a dedicated registered view.
 
 Avoid calling `dds_write`, `dds_take`, or socket functions from view files.
 
@@ -101,3 +112,38 @@ on_color=FFFFFF
 
 Values accept `RRGGBB` or `RRGGBBAA`. Unknown entries are ignored, so future
 theme roles can be added without invalidating older theme files.
+
+## Controller Configuration
+
+Default bindings are stored in:
+
+```text
+romfs:/ui/controls.ini
+```
+
+An SD-card override is loaded from:
+
+```text
+SD:/3ds/ros2_3ds_interface/controls.ini
+```
+
+Supported values are `A`, `B`, `X`, `Y`, `L`, `R`, `UP`, `DOWN`, `LEFT`,
+`RIGHT`, `START`, `SELECT`, `ZL`, and `ZR`.
+
+```ini
+publish_once=A
+toggle_publishing=B
+toggle_listener=Y
+send_probe=X
+next_view=R
+previous_view=L
+next_item=DOWN
+previous_item=UP
+activate=A
+back=B
+exit=START
+```
+
+Duplicate bindings are supported when intentional, such as `A` for publishing
+on Home and activating Menu items. Keep runtime actions on Home to avoid
+ambiguous input in secondary views.

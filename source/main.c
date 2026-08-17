@@ -247,14 +247,20 @@ static void receive_probes(probe_state *state) {
     }
 
     static void chatter_receive_callback(void *context, const char *data) {
-        (void)context;
+        char *last_message = context;
+        if (last_message != NULL) {
+            snprintf(last_message, 65, "%s", data);
+        }
         app_log_write(APP_LOG_INFO, "ROS REMOTE RX %s", data);
     }
 
-    static void publish_chatter(dds_runtime *dds, u32 *sequence) {
+    static void publish_chatter(dds_runtime *dds, u32 *sequence, char *last_message) {
         char payload[64];
         snprintf(payload, sizeof(payload), "Hello from 3DS: %lu", (unsigned long)(*sequence)++);
         if (dds_runtime_publish_chatter(dds, payload)) {
+            if (last_message != NULL) {
+                snprintf(last_message, 65, "%s", payload);
+            }
             app_log_write(APP_LOG_INFO, "ROS TX %s", payload);
         } else {
             app_log_write(APP_LOG_ERROR, "ROS TX failed %s", dds_runtime_error_text(dds));
@@ -355,6 +361,8 @@ int main(void) {
     bool chatter_publishing = false;
     bool chatter_listening = true;
     u32 chatter_sequence = 0;
+    char last_published_message[65] = "No local message yet";
+    char last_received_message[65] = "No remote message yet";
     u64 next_chatter_at = 0;
     u64 next_graph_at = osGetTime() + GRAPH_REFRESH_MS;
     u64 next_status_at = 0;
@@ -374,7 +382,7 @@ int main(void) {
 
         u64 now = osGetTime();
         if (actions & UI_ACTION_PUBLISH_ONCE) {
-            publish_chatter(&dds, &chatter_sequence);
+            publish_chatter(&dds, &chatter_sequence, last_published_message);
         }
         if (actions & UI_ACTION_TOGGLE_PUBLISHING) {
             chatter_publishing = !chatter_publishing;
@@ -386,7 +394,7 @@ int main(void) {
             app_log_write(APP_LOG_INFO, "ROS listener %s", chatter_listening ? "enabled" : "disabled");
         }
         if (chatter_publishing && now >= next_chatter_at) {
-            publish_chatter(&dds, &chatter_sequence);
+            publish_chatter(&dds, &chatter_sequence, last_published_message);
             next_chatter_at = now + config.send_interval_ms;
         }
         if (dds.running && now >= next_graph_at) {
@@ -457,7 +465,7 @@ int main(void) {
             receive_probes(&state);
         }
         if (chatter_listening) {
-            dds_runtime_poll_chatter(&dds, chatter_receive_callback, NULL);
+            dds_runtime_poll_chatter(&dds, chatter_receive_callback, last_received_message);
         }
 
         if (now >= next_status_at) {
@@ -495,6 +503,8 @@ int main(void) {
             .peer_ip = config.peer_ip[0] != '\0' ? config.peer_ip : "-",
             .last_probe_sender = state.last_sender,
             .last_probe_payload = state.last_payload,
+            .last_published_message = last_published_message,
+            .last_received_message = last_received_message,
             .dds_status = dds_runtime_status(&dds),
             .dds_error = dds_runtime_error_text(&dds),
             .log_path = app_log_file_path(),

@@ -67,12 +67,18 @@ The 3DS log should display `ROS REMOTE RX`.
 
 | Button | Action |
 | --- | --- |
-| A | Publish one message |
-| B | Toggle publishing at 1 Hz |
-| Y | Toggle the subscriber |
-| X | Send a diagnostic UDP probe |
-| L / R | Change UI view |
+| Default binding | Action |
+| --- | --- |
+| A | Publish one message from Home; activate a Menu item |
+| B | Toggle publishing from Home; return from Menu subviews |
+| Y | Toggle the subscriber from Home |
+| X | Send a diagnostic UDP probe from Home |
+| L / R | Change main tab |
+| Up / Down | Select Menu items or Topics |
 | START | Exit |
+
+Bindings are editable before building in `romfs/ui/controls.ini`, or can be
+overridden from `SD:/3ds/ros2_3ds_interface/controls.ini`.
 
 ## Network Setup
 

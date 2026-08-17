@@ -40,15 +40,16 @@ void ui_header(ui_context *ui, const char *title, const char *subtitle) {
 
 void ui_bottom_nav(ui_context *ui) {
     ui_rect(0, 0, 320, 32, ui->theme.header);
-    const float width = 320.0f / UI_VIEW_COUNT;
-    for (int index = 0; index < UI_VIEW_COUNT; index++) {
-        const bool selected = ui->view == (ui_view_id)index;
+    const float width = 80.0f;
+    static const ui_view_id primary[] = { UI_VIEW_HOME, UI_VIEW_TOPICS, UI_VIEW_SERVICES, UI_VIEW_MENU };
+    for (int index = 0; index < 4; index++) {
+        const bool selected = ui->view == primary[index];
         if (selected) {
             ui_rect(index * width, 29, width, 3, ui->theme.accent);
         }
         ui_text(ui, index * width + 7, 9, 0.34f,
                 selected ? ui->theme.on_color : C2D_Color32(205, 215, 235, 255),
-                ui_views[index].label);
+                ui_views[primary[index]].label);
     }
 }
 

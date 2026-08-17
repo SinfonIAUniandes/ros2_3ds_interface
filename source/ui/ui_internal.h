@@ -12,6 +12,9 @@ typedef struct {
     C2D_TextBuf text_buffer;
     ui_theme theme;
     ui_view_id view;
+    ui_controls controls;
+    uint8_t selected_topic;
+    uint8_t selected_menu_item;
 } ui_context;
 
 typedef struct {
@@ -21,7 +24,15 @@ typedef struct {
     void (*render_bottom)(ui_context *ui, const ui_snapshot *snapshot);
 } ui_view_definition;
 
+typedef struct {
+    const char *name;
+    const char *type_name;
+    const char *qos;
+} ui_topic_definition;
+
 extern const ui_view_definition ui_views[UI_VIEW_COUNT];
+extern const ui_topic_definition ui_topics[];
+extern const size_t ui_topic_count;
 
 void ui_text(ui_context *ui, float x, float y, float scale, u32 color, const char *text);
 void ui_textf(ui_context *ui, float x, float y, float scale, u32 color, const char *format, ...);
@@ -35,14 +46,25 @@ void ui_metric(ui_context *ui, float x, float y, const char *label, const char *
 void ui_button(ui_context *ui, float x, float y, float width, float height,
                const char *key, const char *label, bool active);
 bool ui_hit(const touchPosition *touch, float x, float y, float width, float height);
+bool ui_is_primary_view(ui_view_id view);
+void ui_set_view(ui_context *ui, ui_view_id view);
+void ui_controls_defaults(ui_controls *controls);
+bool ui_controls_load(ui_controls *controls, const char *path);
+const char *ui_control_label(u32 mask);
 
-void ui_view_overview_top(ui_context *ui, const ui_snapshot *snapshot);
-void ui_view_overview_bottom(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_home_top(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_home_bottom(ui_context *ui, const ui_snapshot *snapshot);
 void ui_view_topics_top(ui_context *ui, const ui_snapshot *snapshot);
 void ui_view_topics_bottom(ui_context *ui, const ui_snapshot *snapshot);
-void ui_view_diagnostics_top(ui_context *ui, const ui_snapshot *snapshot);
-void ui_view_diagnostics_bottom(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_services_top(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_services_bottom(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_menu_top(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_menu_bottom(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_details_top(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_details_bottom(ui_context *ui, const ui_snapshot *snapshot);
 void ui_view_logs_top(ui_context *ui, const ui_snapshot *snapshot);
 void ui_view_logs_bottom(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_settings_top(ui_context *ui, const ui_snapshot *snapshot);
+void ui_view_settings_bottom(ui_context *ui, const ui_snapshot *snapshot);
 
 #endif

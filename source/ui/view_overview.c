@@ -6,8 +6,8 @@ static void card_title(ui_context *ui, float x, float y, const char *title) {
     ui_text(ui, x + 9, y + 7, 0.37f, ui->theme.muted, title);
 }
 
-void ui_view_overview_top(ui_context *ui, const ui_snapshot *snapshot) {
-    ui_header(ui, "Overview", snapshot->local_ip);
+void ui_view_home_top(ui_context *ui, const ui_snapshot *snapshot) {
+    ui_header(ui, "Home", snapshot->local_ip);
 
     ui_panel(ui, 8, 57, 188, 76);
     card_title(ui, 8, 57, "CONNECTION");
@@ -43,17 +43,20 @@ void ui_view_overview_top(ui_context *ui, const ui_snapshot *snapshot) {
              (unsigned long)snapshot->rtps_rx_remote, snapshot->log_has_error ? "warning" : "clean");
 }
 
-void ui_view_overview_bottom(ui_context *ui, const ui_snapshot *snapshot) {
+void ui_view_home_bottom(ui_context *ui, const ui_snapshot *snapshot) {
     ui_text(ui, 8, 38, 0.36f, ui->theme.muted, "Quick actions");
-    ui_button(ui, 8, 48, 148, 42, "A", "Publish once", false);
-    ui_button(ui, 164, 48, 148, 42, "B", "Auto publish", snapshot->publishing);
-    ui_button(ui, 8, 98, 148, 42, "Y", "Subscriber", snapshot->listening);
-    ui_button(ui, 164, 98, 148, 42, "X", "UDP probe", false);
+    const ui_controls *controls = app_ui_controls();
+    ui_button(ui, 8, 48, 148, 42, app_ui_control_label(controls->publish_once), "Publish once", false);
+    ui_button(ui, 164, 48, 148, 42, app_ui_control_label(controls->toggle_publishing), "Auto publish", snapshot->publishing);
+    ui_button(ui, 8, 98, 148, 42, app_ui_control_label(controls->toggle_listener), "Subscriber", snapshot->listening);
+    ui_button(ui, 164, 98, 148, 42, app_ui_control_label(controls->send_probe), "UDP probe", false);
 
     ui_panel(ui, 8, 151, 304, 59);
     ui_text(ui, 18, 161, 0.34f, ui->theme.muted, "Current topic");
     ui_text(ui, 18, 179, 0.48f, ui->theme.text, "/chatter");
     ui_textf(ui, 128, 181, 0.32f, ui->theme.muted, "%lu ms interval",
              (unsigned long)snapshot->send_interval_ms);
-    ui_text(ui, 8, 220, 0.30f, ui->theme.muted, "L/R views     Touch tabs     START exit");
+    ui_textf(ui, 8, 220, 0.30f, ui->theme.muted, "%s/%s tabs  |  Touch tabs  |  %s exit",
+             app_ui_control_label(controls->previous_view), app_ui_control_label(controls->next_view),
+             app_ui_control_label(controls->exit));
 }
