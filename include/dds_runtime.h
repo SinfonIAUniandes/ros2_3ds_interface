@@ -23,7 +23,8 @@ typedef struct {
 
 void dds_runtime_init(dds_runtime *runtime);
 void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context);
-bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip);
+bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
+                       const char *broadcast_ip);
 void dds_runtime_stop(dds_runtime *runtime);
 bool dds_runtime_publish_chatter(dds_runtime *runtime, const char *data);
 bool dds_runtime_refresh_graph(dds_runtime *runtime);

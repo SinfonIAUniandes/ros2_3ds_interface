@@ -23,7 +23,7 @@
 #define STATUS_REFRESH_MS 500
 #define GRAPH_REFRESH_MS 5000
 #define RTPS_LOG_INTERVAL_MS 5000
-#define APP_BUILD_ID "20260816-static-peer"
+#define APP_BUILD_ID "20260816-subnet-discovery"
 
 typedef struct {
     char peer_ip[INET_ADDRSTRLEN];
@@ -327,12 +327,6 @@ int main(void) {
     if (config.peer_ip_invalid) {
         app_log_write(APP_LOG_WARN, "Invalid peer_ip ignored; using multicast discovery");
     }
-    if (config.peer_ip[0] != '\0') {
-        app_log_write(APP_LOG_INFO, "DDS discovery mode: multicast + static peer %s", config.peer_ip);
-    } else {
-        app_log_write(APP_LOG_INFO, "DDS discovery mode: multicast only");
-    }
-
     void *soc_buffer = memalign(0x1000, SOC_BUFFER_SIZE);
     int soc_result = soc_buffer ? (int)socInit((u32 *)soc_buffer, SOC_BUFFER_SIZE) : -1;
     app_log_write(soc_result == 0 ? APP_LOG_INFO : APP_LOG_ERROR, "socInit result=0x%08X", (unsigned int)soc_result);
@@ -344,8 +338,12 @@ int main(void) {
     bool network_ready = soc_result == 0 && get_local_network(&local_ip, &netmask, &broadcast);
     const char *ip_text = network_ready ? inet_ntoa(local_ip) : NULL;
     char local_ip_text[INET_ADDRSTRLEN] = "unavailable";
+    char broadcast_ip_text[INET_ADDRSTRLEN] = "";
     if (ip_text) {
         strncpy(local_ip_text, ip_text, sizeof(local_ip_text) - 1);
+    }
+    if (network_ready) {
+        inet_ntop(AF_INET, &broadcast, broadcast_ip_text, sizeof(broadcast_ip_text));
     }
     draw_static_status(&status_console, &config, local_ip_text, network_ready, soc_result);
 
@@ -371,8 +369,15 @@ int main(void) {
     int32_t last_recv_errno = 0;
     int32_t last_multicast_if_errno = 0;
     if (network_ready && config.dds_enabled) {
+        if (config.peer_ip[0] != '\0') {
+            app_log_write(APP_LOG_INFO, "DDS discovery: multicast + static peer %s", config.peer_ip);
+        } else {
+            app_log_write(APP_LOG_INFO, "DDS discovery: multicast + subnet broadcast %s",
+                          broadcast_ip_text);
+        }
         app_log_write(APP_LOG_INFO, "DDS compatibility: RTPS 2.1");
-        bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip);
+        bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
+                                         broadcast_ip_text);
         app_log_write(started ? APP_LOG_INFO : APP_LOG_ERROR, "DDS participant %s rc=%ld %s",
                       started ? "started" : "failed", (long)dds.last_result,
                       dds_runtime_error_text(&dds));

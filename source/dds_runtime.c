@@ -44,7 +44,8 @@ void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context) {
     dds_set_trace_sink(NULL, NULL);
 }
 
-bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip) {
+bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
+                       const char *broadcast_ip) {
     if (runtime->running) {
         return true;
     }
@@ -52,10 +53,30 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
     const char *domain_config =
         "<CycloneDDS><Domain Id=\"any\"><Compatibility><ProtocolVersion>2.1</ProtocolVersion>"
         "</Compatibility></Domain></CycloneDDS>";
-    char peer_domain_config[384];
-    if (peer_ip != NULL && peer_ip[0] != '\0') {
-        struct in_addr peer_address;
-        if (inet_pton(AF_INET, peer_ip, &peer_address) != 1) {
+    char peer_domain_config[448];
+    if ((peer_ip != NULL && peer_ip[0] != '\0') ||
+        (broadcast_ip != NULL && broadcast_ip[0] != '\0')) {
+        const bool explicit_peer = peer_ip != NULL && peer_ip[0] != '\0';
+        const char *address = explicit_peer ? peer_ip : broadcast_ip;
+        struct in_addr parsed_address;
+        if (inet_pton(AF_INET, address, &parsed_address) != 1) {
+            runtime->last_result = DDS_RETCODE_BAD_PARAMETER;
+            return false;
+        }
+        char peer_locator[INET_ADDRSTRLEN + 8];
+        int locator_length;
+        if (explicit_peer) {
+            locator_length = snprintf(peer_locator, sizeof(peer_locator), "%s", address);
+        } else {
+            uint32_t discovery_port = 7400u + 250u * domain_id;
+            if (discovery_port > 65535u) {
+                runtime->last_result = DDS_RETCODE_BAD_PARAMETER;
+                return false;
+            }
+            locator_length = snprintf(peer_locator, sizeof(peer_locator), "%s:%lu", address,
+                                      (unsigned long)discovery_port);
+        }
+        if (locator_length < 0 || (size_t)locator_length >= sizeof(peer_locator)) {
             runtime->last_result = DDS_RETCODE_BAD_PARAMETER;
             return false;
         }
@@ -63,8 +84,8 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
             "<CycloneDDS><Domain Id=\"any\"><Compatibility><ProtocolVersion>2.1</ProtocolVersion>"
             "</Compatibility><Discovery><ParticipantIndex>auto</ParticipantIndex>"
             "<MaxAutoParticipantIndex>9</MaxAutoParticipantIndex>"
-            "<Peers><Peer Address=\"%s\"/></Peers></Discovery>"
-            "</Domain></CycloneDDS>", peer_ip);
+            "<Peers><Peer Address=\"%s\" PruneDelay=\"inf\"/></Peers></Discovery>"
+            "</Domain></CycloneDDS>", peer_locator);
         if (config_length < 0 || (size_t)config_length >= sizeof(peer_domain_config)) {
             runtime->last_result = DDS_RETCODE_BAD_PARAMETER;
             return false;

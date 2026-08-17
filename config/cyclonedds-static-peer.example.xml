@@ -1,8 +1,9 @@
+<!-- Replace 192.0.2.10 with the host LAN address and 192.0.2.20 with the 3DS LAN address. -->
 <CycloneDDS>
   <Domain Id="any">
     <General>
       <Interfaces>
-        <NetworkInterface address="192.168.1.6" />
+        <NetworkInterface address="192.0.2.10" />
       </Interfaces>
       <AllowMulticast>false</AllowMulticast>
     </General>
@@ -10,7 +11,7 @@
       <ParticipantIndex>auto</ParticipantIndex>
       <MaxAutoParticipantIndex>9</MaxAutoParticipantIndex>
       <Peers>
-        <Peer Address="192.168.1.2" />
+        <Peer Address="192.0.2.20" />
       </Peers>
     </Discovery>
   </Domain>

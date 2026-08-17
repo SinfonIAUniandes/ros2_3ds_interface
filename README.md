@@ -23,8 +23,7 @@ Controls on the 3DS are:
 - X: send the existing UDP diagnostic probe immediately
 - START: exit
 
-For a future desktop ROS 2 interoperability check using the same
-`ROS_DOMAIN_ID` as the 3DS, run:
+On a desktop ROS 2 installation using the same `ROS_DOMAIN_ID` as the 3DS, run:
 
 ```sh
 export ROS_DOMAIN_ID=0
@@ -41,8 +40,8 @@ ros2 topic pub --rate 1 /chatter std_msgs/msg/String '{data: desktop to 3ds}'
 
 The 3DS log should show `ROS REMOTE RX`. `MATCH W:<n> R:<n>` reports DDS
 endpoint discovery; matching alone is not listener proof. A `ROS REMOTE RX`
-log entry is the proof that the listener received external peer data. Desktop
-ROS discovery has not been validated by this project.
+log entry is the proof that the listener received external peer data. Chatter
+has been validated bidirectionally with ROS 2 Jazzy and `rmw_cyclonedds_cpp`.
 
 The top-screen `RTPS TXM:<n> TXU:<n> RX:<n> REM:<n>` row reports low-level
 Cyclone DDS socket traffic: multicast sends, unicast sends, all received DDS
@@ -53,18 +52,44 @@ datagrams, and datagrams whose source IPv4 differs from the 3DS address.
 `QW:<n> QR:<n>` reports incompatible QoS rejections for the chatter writer and
 reader. A nonzero QoS count is logged with the rejected policy ID.
 
+## Network discovery
+
+The distributed build contains no host address. It uses standard DDS multicast
+discovery on `239.255.0.1` and also sends an undirected SPDP announcement to the
+IPv4 subnet broadcast address calculated by `SOCU_GetIPInfo`. The broadcast uses
+the domain metatraffic port (`7400 + 250 * domain_id`), which normal multicast-
+enabled DDS participants already bind. A participant that receives it can reply
+to the 3DS unicast locator. This allows ROS 2 machines on the same IPv4 LAN and
+domain to join without changing or rebuilding the application, including on
+networks that suppress multicast delivery to the 3DS.
+
+Remove any previous `SD:/3ds/ros2_3ds_interface/config.ini`, or leave `peer_ip`
+blank, to use automatic LAN discovery. In this mode, `TXU>0` confirms subnet
+broadcast attempts and `REM>0` confirms that another machine replied.
+
+On a normal host, clear old Cyclone overrides before testing:
+
+```powershell
+$env:ROS_DOMAIN_ID = "0"
+Remove-Item Env:CYCLONEDDS_URI -ErrorAction SilentlyContinue
+ros2 daemon stop
+ros2 topic echo /chatter std_msgs/msg/String
+```
+
+Windows must classify the LAN as private and permit inbound ROS 2 UDP traffic.
+Machines with VPN, Hyper-V, Docker, or WSL adapters may also require their RMW
+configuration to select the physical LAN interface. That is host configuration
+and never requires rebuilding the 3DS application.
+
+The broadcast bootstrap is IPv4 and local-subnet only. It does not cross routers
+or VLANs, and access points with client isolation can still block it.
+
 ## Static peer fallback
 
-The runtime always creates a generic Cyclone DDS domain configured for RTPS
-2.1 compatibility. The built-in `romfs/config.ini` supplies defaults. After
-the first launch, create or edit `SD:/3ds/ros2_3ds_interface/config.ini` to
-override them; changing this external file requires no rebuild. No `peer_ip`
-is needed on normal LANs: leave it blank to use standard multicast discovery.
-Set `peer_ip` only when network equipment filters multicast discovery, using
-the physical LAN IPv4 address of a DDS peer, such as the Windows adapter
-address `192.168.1.6`. This adds that address as a direct Cyclone DDS SPDP
-discovery peer and continues to use it for the existing UDP probe. Invalid
-values are ignored and multicast discovery is used instead.
+Some access points or host firewalls block multicast. In that case, create or
+edit `SD:/3ds/ros2_3ds_interface/config.ini`; changing it requires no rebuild.
+Set `peer_ip` to one physical ROS 2 host address. Invalid values are ignored and
+the application falls back to multicast discovery.
 
 When `peer_ip` is set, the 3DS uses `ParticipantIndex=auto` so discovery uses
 the predictable RTPS unicast ports beginning at `7410`. A peer without an
@@ -73,34 +98,20 @@ explicit port cannot discover a participant using arbitrary unicast ports.
 For example, put this in `SD:/3ds/ros2_3ds_interface/config.ini`:
 
 ```ini
-peer_ip=192.168.1.6
+peer_ip=192.0.2.10
 port=17650
 send_interval_ms=1000
 domain_id=0
 dds_enabled=1
 ```
 
-Do not use a WSL `192.168.184.x` address. Run `ipconfig` on Windows and enter
-the physical Wi-Fi IPv4 address into `peer_ip`. This is direct SPDP peer
-discovery between DDS participants, not a bridge or agent.
-
-For the Windows Wi-Fi addresses used by this build, set the same configuration
-inline from PowerShell before starting any ROS process. This avoids Windows/WSL
-file URI conversion:
-
-```powershell
-$env:RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
-$env:ROS_DOMAIN_ID = "0"
-$env:CYCLONEDDS_URI = '<CycloneDDS><Domain Id="any"><General><Interfaces><NetworkInterface address="192.168.1.6" /></Interfaces><AllowMulticast>false</AllowMulticast></General><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>9</MaxAutoParticipantIndex><Peers><Peer Address="192.168.1.2" /></Peers></Discovery></Domain></CycloneDDS>'
-ros2 daemon stop
-ros2 topic echo /chatter std_msgs/msg/String
-```
-
-The equivalent formatted XML is available in `config/cyclonedds-windows.xml`.
-This configuration selects the physical `192.168.1.6` Wi-Fi interface, disables
-multicast for the test, and directly peers with the 3DS at `192.168.1.2`. WSL2
-remains unsuitable for this direct test because its `192.168.184.x` interface
-is behind NAT.
+Replace the documentation address with the host's current physical LAN IPv4.
+Configure the host in the opposite direction using
+`config/cyclonedds-static-peer.example.xml`: replace `192.0.2.10` with the host
+address and `192.0.2.20` with the current 3DS address, then set
+`CYCLONEDDS_URI` to that file. The predictable participant ports are enabled
+automatically whenever `peer_ip` is set. This is direct SPDP discovery, not a
+bridge or agent. WSL2 NAT addresses are not suitable peers.
 
 ## ROS graph discovery
 
@@ -112,11 +123,10 @@ The graph sample is published once when DDS starts and refreshed every five
 seconds; `GRAPH P:<count>` reports successful graph publications and `GRAPH M:<count>`
 is the remote `ros_discovery_info` subscriber match count.
 
-This interoperability path still requires validation with a desktop ROS RMW,
-because discovery metadata and type compatibility are implementation-sensitive.
-WSL addresses in `192.168.184.x` are not on the same LAN as a 3DS at
-`192.168.1.x`, so WSL cannot validate LAN DDS discovery. Use the Windows host's
-physical Wi-Fi connection or a native Linux host on `192.168.1.x` instead.
+The graph and chatter paths are validated with `rmw_cyclonedds_cpp`. Other ROS
+2 RMW implementations should interoperate through RTPS, but remain separate
+compatibility targets because discovery metadata and type compatibility are
+implementation-sensitive.
 
 ## Current probe
 
@@ -196,7 +206,7 @@ independent UDP probe. The endpoint `MATCH W:<n> R:<n>` counts show DDS
 endpoint discovery; `ROS REMOTE RX` confirms that the external listener test
 delivered data to the 3DS.
 
-Hardware logs must show build ID `20260816-static-peer` exactly; otherwise,
+Hardware logs must show build ID `20260816-subnet-discovery` exactly; otherwise,
 the SD card contains a stale `.3dsx`.
 
 For post-run diagnosis, open this SD card path in a file manager or on a PC:
@@ -206,11 +216,14 @@ For post-run diagnosis, open this SD card path in a file manager or on a PC:
 ```
 
 The gate passes when the screen reports a successful multicast membership and
-the transmit counter increases without socket errors. Receiving multicast,
-validating an optional peer, and validating ROS graph discovery with a desktop
-ROS RMW remain hardware/network integration checks.
+the transmit counter increases without socket errors. Bidirectional chatter,
+static-peer discovery, and ROS graph discovery have been validated with a
+desktop Cyclone DDS RMW.
 
 ## Scope
 
 ROS 2 services remain pending. Communication remains direct DDS/RTPS without
 a Micro XRCE-DDS Agent or another bridge.
+
+
+https://github.com/SinfonIAUniandes/cyclone3dds
