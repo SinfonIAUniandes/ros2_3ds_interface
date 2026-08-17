@@ -1,229 +1,116 @@
 # ROS 2 3DS Interface
 
-Native ROS 2/DDS experiments for Nintendo 3DS homebrew. The application links
-the local Cyclone DDS 3DS port and creates a native DDS participant after
-initializing `soc:u`.
+A native ROS 2 publisher and subscriber for Nintendo 3DS homebrew. The app
+connects directly to DDS over Wi-Fi, publishes and receives
+`std_msgs/msg/String` on `/chatter`, and appears in the ROS 2 graph without an
+agent or bridge.
 
-## ROS 2 chatter
+Bidirectional communication has been validated with ROS 2 Jazzy and
+`rmw_cyclonedds_cpp` on Windows.
 
-This build creates a ROS 2-compatible `/chatter` publisher/subscriber endpoint.
-It maps to the DDS topic `rt/chatter` with the exact type
-`std_msgs::msg::dds_::String_` (`std_msgs/msg/String`). It uses the generated
-`std_msgs_string` Cyclone DDS IDL descriptor, including its XTypes metadata,
-rather than a hand-written descriptor. The endpoint uses
-KEEP_LAST(10), RELIABLE, and VOLATILE QoS. The reader intentionally ignores
-data from its local DDS participant, so ROS RX messages always represent data
-from an external peer rather than the 3DS publishing to itself.
+## Requirements
 
-Controls on the 3DS are:
+- A Nintendo 3DS with access to the Homebrew Launcher
+- Both devices connected to the same IPv4 LAN
+- A ROS 2 installation on the computer
+- Matching `ROS_DOMAIN_ID` values; the default is `0`
+- Inbound ROS 2 UDP traffic allowed by the host firewall
 
-- A: publish one `Hello from 3DS: <counter>` message
-- B: toggle automatic chatter publishing at 1 Hz
-- Y: toggle the ROS listener
-- X: send the existing UDP diagnostic probe immediately
-- START: exit
+The 3DS build uses the Nintendo 3DS Cyclone DDS port from
+[SinfonIAUniandes/cyclone3dds](https://github.com/SinfonIAUniandes/cyclone3dds).
+That specific fork is required when building from source.
 
-On a desktop ROS 2 installation using the same `ROS_DOMAIN_ID` as the 3DS, run:
+## Install
 
-```sh
-export ROS_DOMAIN_ID=0
-ros2 topic echo /chatter std_msgs/msg/String
-ros2 topic pub /chatter std_msgs/msg/String '{data: hello}'
-```
+1. Copy `ros2_3ds_interface.3dsx` to:
 
-For an explicit remote listener test, start the app with the listener enabled,
-then run on the desktop:
+   ```text
+   SD:/3ds/ros2_3ds_interface/ros2_3ds_interface.3dsx
+   ```
 
-```sh
-ros2 topic pub --rate 1 /chatter std_msgs/msg/String '{data: desktop to 3ds}'
-```
+2. Launch **ROS 2 3DS Interface** from the Homebrew Launcher.
+3. Confirm that the top screen reports `DDS RUNNING`.
+4. Start a ROS 2 process on a computer connected to the same LAN.
 
-The 3DS log should show `ROS REMOTE RX`. `MATCH W:<n> R:<n>` reports DDS
-endpoint discovery; matching alone is not listener proof. A `ROS REMOTE RX`
-log entry is the proof that the listener received external peer data. Chatter
-has been validated bidirectionally with ROS 2 Jazzy and `rmw_cyclonedds_cpp`.
-
-The top-screen `RTPS TXM:<n> TXU:<n> RX:<n> REM:<n>` row reports low-level
-Cyclone DDS socket traffic: multicast sends, unicast sends, all received DDS
-datagrams, and datagrams whose source IPv4 differs from the 3DS address.
-`REM>0` proves that a remote DDS datagram reached the 3DS socket, while
-`MATCH>0` proves that DDS parsed discovery data and matched an endpoint. The
-`ERR TX:<n> RX:<n>` row exposes the latest non-transient socket errors, and
-`QW:<n> QR:<n>` reports incompatible QoS rejections for the chatter writer and
-reader. A nonzero QoS count is logged with the rejected policy ID.
-
-## Network discovery
-
-The distributed build contains no host address. It uses standard DDS multicast
-discovery on `239.255.0.1` and also sends an undirected SPDP announcement to the
-IPv4 subnet broadcast address calculated by `SOCU_GetIPInfo`. The broadcast uses
-the domain metatraffic port (`7400 + 250 * domain_id`), which normal multicast-
-enabled DDS participants already bind. A participant that receives it can reply
-to the 3DS unicast locator. This allows ROS 2 machines on the same IPv4 LAN and
-domain to join without changing or rebuilding the application, including on
-networks that suppress multicast delivery to the 3DS.
-
-Remove any previous `SD:/3ds/ros2_3ds_interface/config.ini`, or leave `peer_ip`
-blank, to use automatic LAN discovery. In this mode, `TXU>0` confirms subnet
-broadcast attempts and `REM>0` confirms that another machine replied.
-
-On a normal host, clear old Cyclone overrides before testing:
+PowerShell:
 
 ```powershell
 $env:ROS_DOMAIN_ID = "0"
+$env:RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
 Remove-Item Env:CYCLONEDDS_URI -ErrorAction SilentlyContinue
 ros2 daemon stop
 ros2 topic echo /chatter std_msgs/msg/String
 ```
 
-Windows must classify the LAN as private and permit inbound ROS 2 UDP traffic.
-Machines with VPN, Hyper-V, Docker, or WSL adapters may also require their RMW
-configuration to select the physical LAN interface. That is host configuration
-and never requires rebuilding the 3DS application.
-
-The broadcast bootstrap is IPv4 and local-subnet only. It does not cross routers
-or VLANs, and access points with client isolation can still block it.
-
-## Static peer fallback
-
-Some access points or host firewalls block multicast. In that case, create or
-edit `SD:/3ds/ros2_3ds_interface/config.ini`; changing it requires no rebuild.
-Set `peer_ip` to one physical ROS 2 host address. Invalid values are ignored and
-the application falls back to multicast discovery.
-
-When `peer_ip` is set, the 3DS uses `ParticipantIndex=auto` so discovery uses
-the predictable RTPS unicast ports beginning at `7410`. A peer without an
-explicit port cannot discover a participant using arbitrary unicast ports.
-
-For example, put this in `SD:/3ds/ros2_3ds_interface/config.ini`:
-
-```ini
-peer_ip=192.0.2.10
-port=17650
-send_interval_ms=1000
-domain_id=0
-dds_enabled=1
-```
-
-Replace the documentation address with the host's current physical LAN IPv4.
-Configure the host in the opposite direction using
-`config/cyclonedds-static-peer.example.xml`: replace `192.0.2.10` with the host
-address and `192.0.2.20` with the current 3DS address, then set
-`CYCLONEDDS_URI` to that file. The predictable participant ports are enabled
-automatically whenever `peer_ip` is set. This is direct SPDP discovery, not a
-bridge or agent. WSL2 NAT addresses are not suitable peers.
-
-## ROS graph discovery
-
-The application publishes `ros_discovery_info` using the ROS 2
-`ParticipantEntitiesInfo` type. Its single node entry describes
-`/ros2_3ds_interface` and both `/chatter` endpoint GIDs, so `/chatter` should
-be visible in `ros2 topic list` on a desktop ROS 2 host in the same domain.
-The graph sample is published once when DDS starts and refreshed every five
-seconds; `GRAPH P:<count>` reports successful graph publications and `GRAPH M:<count>`
-is the remote `ros_discovery_info` subscriber match count.
-
-The graph and chatter paths are validated with `rmw_cyclonedds_cpp`. Other ROS
-2 RMW implementations should interoperate through RTPS, but remain separate
-compatibility targets because discovery metadata and type compatibility are
-implementation-sensitive.
-
-## Current probe
-
-The application currently verifies these capabilities:
-
-- `socInit` and local IPv4 discovery
-- UDP socket creation and non-blocking receive
-- bind to a separate UDP probe port, default `17650`, outside the RTPS port range
-- join and leave the RTPS multicast group `239.255.0.1`
-- multicast send and receive
-- optional unicast send and receive against a configured peer
-- Cyclone DDS multi-iovec UDP sends, with fragments concatenated for libctru `sendto`
-- persistent application, network, and Cyclone DDS logs on the bottom screen
-
-The top screen is a stable status view refreshed twice per second. The bottom
-screen retains only the 16 most recent operational events, so DDS diagnostics
-cannot grow the console memory indefinitely. Persistent logs are organized as:
-
-```text
-sdmc:/3ds/ros2_3ds_interface/logs/YYYYMMDD/session-HHMMSS-mmm.log
-sdmc:/3ds/ros2_3ds_interface/logs/YYYYMMDD/errors/error-<timestamp>-<sequence>.log
-```
-
-Every application launch creates a new session log. Each `ERR` event creates an
-independent error snapshot containing the error and the recent event context.
-At the first launch on a new day, the previous day's log directory is removed.
-
-## Logging Layout
-
-The logging module is isolated from UI, network, and DDS lifecycle code:
-
-```text
-include/logging/app_log.h
-source/logging/app_log.c
-```
-
-It owns the in-memory circular buffer, bottom-screen rendering, SD directory
-creation, and persistent file output. The application and DDS runtime only emit
-structured events through its public API. Cyclone DDS trace output is not sent
-to the console; only normal informational messages, warnings, and errors are
-captured, keeping the diagnostics readable.
-
-The Cyclone DDS 3DS socket layer attempts native multicast interface selection
-using libctru socket option 32. When the SOC service rejects that option, the
-backend records its errno as `MIF` and continues with the only active Wi-Fi
-route. Multicast group membership is still independently checked through
-`IP_ADD_MEMBERSHIP`. The independent probe selects the local interface through
-`ip_mreq.imr_interface` when joining.
-
-## Build
-
-Build `libddsc.a` from the sibling Cyclone port first:
+Linux:
 
 ```sh
-cd ../cyclonedds_3ds
-cmake --build build-3ds --target ddsc
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+unset CYCLONEDDS_URI
+ros2 daemon stop
+ros2 topic echo /chatter std_msgs/msg/String
 ```
 
-Then build the 3DS application:
+Press **A** on the 3DS. The computer should receive a `Hello from 3DS`
+message.
+
+To send data to the 3DS:
 
 ```sh
-export DEVKITPRO=/opt/devkitpro
-export DEVKITARM="$DEVKITPRO/devkitARM"
-make
+ros2 topic pub --rate 1 /chatter std_msgs/msg/String '{data: Hello from ROS 2}'
 ```
 
-The output is `ros2_3ds_interface.3dsx`.
+The 3DS log should display `ROS REMOTE RX`.
 
-## Hardware test
+## Controls
 
-Launch the `.3dsx` on real hardware and verify the socket, bind, and multicast
-membership results on screen. The `DDS` line must report `RUNNING` with return
-code `0`; this confirms that the static Cyclone runtime created a participant
-and its `/chatter` endpoints directly on the 3DS. Press A to publish chatter,
-B to toggle 1 Hz chatter, Y to toggle the ROS listener, and X to transmit the
-independent UDP probe. The endpoint `MATCH W:<n> R:<n>` counts show DDS
-endpoint discovery; `ROS REMOTE RX` confirms that the external listener test
-delivered data to the 3DS.
+| Button | Action |
+| --- | --- |
+| A | Publish one message |
+| B | Toggle publishing at 1 Hz |
+| Y | Toggle the subscriber |
+| X | Send a diagnostic UDP probe |
+| START | Exit |
 
-Hardware logs must show build ID `20260816-subnet-discovery` exactly; otherwise,
-the SD card contains a stale `.3dsx`.
+## Network Setup
 
-For post-run diagnosis, open this SD card path in a file manager or on a PC:
+No computer address is compiled into the app. It automatically uses DDS
+multicast and local-subnet broadcast discovery. Most machines on the same LAN
+only need the correct domain ID.
 
-```text
-/3ds/ros2_3ds_interface/logs/YYYYMMDD/
-```
+If automatic discovery is blocked by the network, configure a static peer on
+the SD card without rebuilding the app. See the
+[configuration guide](docs/guides/configuration.md).
 
-The gate passes when the screen reports a successful multicast membership and
-the transmit counter increases without socket errors. Bidirectional chatter,
-static-peer discovery, and ROS graph discovery have been validated with a
-desktop Cyclone DDS RMW.
+WSL2 in its default NAT mode is not expected to participate directly in LAN
+DDS discovery. Use native Windows ROS 2, mirrored networking, or a native Linux
+host instead.
 
-## Scope
+## Build From Source
 
-ROS 2 services remain pending. Communication remains direct DDS/RTPS without
-a Micro XRCE-DDS Agent or another bridge.
+Building requires devkitPro/devkitARM, libctru, CMake, and the
+[cyclone3dds fork](https://github.com/SinfonIAUniandes/cyclone3dds). Follow the
+[building guide](docs/guides/building.md).
 
+## Documentation
 
-https://github.com/SinfonIAUniandes/cyclone3dds
+Start with the [documentation index](docs/README.md).
+
+- [Architecture overview](docs/architecture/overview.md)
+- [Network discovery](docs/architecture/network-discovery.md)
+- [ROS 2 integration](docs/architecture/ros-integration.md)
+- [Runtime configuration](docs/guides/configuration.md)
+- [Building from source](docs/guides/building.md)
+- [Diagnostics and troubleshooting](docs/guides/troubleshooting.md)
+
+## Current Scope
+
+- `/chatter` publisher and subscriber using `std_msgs/msg/String`
+- ROS 2 graph publication for the 3DS node and endpoints
+- IPv4 UDP transport on the local network
+- Multicast, subnet-broadcast, and optional static-peer discovery
+- Persistent diagnostic logs on the SD card
+
+Services, actions, IPv6, DDS Security, and routed discovery are not currently
+implemented.
