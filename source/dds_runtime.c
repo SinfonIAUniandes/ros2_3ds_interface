@@ -34,6 +34,7 @@ void dds_runtime_init(dds_runtime *runtime) {
     runtime->running = false;
     ros2_chatter_init(&runtime->chatter);
     ros2_graph_init(&runtime->graph);
+    ros2_imu_init(&runtime->imu);
 }
 
 void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context) {
@@ -45,7 +46,8 @@ void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context) {
 }
 
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
-                       const char *broadcast_ip) {
+                       const char *broadcast_ip, bool imu_enabled,
+                       double imu_acceleration_scale) {
     if (runtime->running) {
         return true;
     }
@@ -112,6 +114,10 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
         goto fail;
     }
 
+    if (imu_enabled) {
+        (void)ros2_imu_start(&runtime->imu, participant, imu_acceleration_scale);
+    }
+
     if (!ros2_graph_start(&runtime->graph, participant)) {
         runtime->last_result = runtime->graph.last_result;
         goto fail;
@@ -119,7 +125,8 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
 
     if (!ros2_graph_publish(&runtime->graph, participant,
                             ros2_chatter_writer_entity(&runtime->chatter),
-                            ros2_chatter_reader_entity(&runtime->chatter))) {
+                            ros2_chatter_reader_entity(&runtime->chatter),
+                            ros2_imu_writer_entity(&runtime->imu))) {
         runtime->last_result = runtime->graph.last_result;
         goto fail;
     }
@@ -130,6 +137,7 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
 
 fail:
     ros2_graph_stop(&runtime->graph);
+    ros2_imu_stop(&runtime->imu);
     ros2_chatter_stop(&runtime->chatter);
     if (participant >= 0) {
         dds_delete(participant);
@@ -146,6 +154,7 @@ fail:
 void dds_runtime_stop(dds_runtime *runtime) {
     if (runtime->running) {
         ros2_graph_stop(&runtime->graph);
+        ros2_imu_stop(&runtime->imu);
         ros2_chatter_stop(&runtime->chatter);
     }
 
@@ -193,8 +202,19 @@ bool dds_runtime_refresh_graph(dds_runtime *runtime) {
 
     bool published = ros2_graph_publish(&runtime->graph, runtime->participant,
                                         ros2_chatter_writer_entity(&runtime->chatter),
-                                        ros2_chatter_reader_entity(&runtime->chatter));
+                                        ros2_chatter_reader_entity(&runtime->chatter),
+                                        ros2_imu_writer_entity(&runtime->imu));
     runtime->last_result = runtime->graph.last_result;
+    return published;
+}
+
+bool dds_runtime_publish_imu(dds_runtime *runtime, uint64_t timestamp_ms) {
+    if (!runtime->running) {
+        runtime->last_result = DDS_RETCODE_PRECONDITION_NOT_MET;
+        return false;
+    }
+    bool published = ros2_imu_publish(&runtime->imu, timestamp_ms);
+    runtime->last_result = runtime->imu.last_result;
     return published;
 }
 
@@ -219,6 +239,17 @@ uint64_t dds_runtime_chatter_received(const dds_runtime *runtime) {
 
 uint64_t dds_runtime_graph_published(const dds_runtime *runtime) {
     return runtime->graph.published;
+}
+
+uint64_t dds_runtime_imu_transmitted(const dds_runtime *runtime) {
+    return runtime->imu.transmitted;
+}
+
+int32_t dds_runtime_imu_writer_matches(dds_runtime *runtime) {
+    if (!runtime->running || runtime->imu.writer <= DDS_ENTITY_NIL) return 0;
+    int32_t matches = ros2_imu_writer_matches(&runtime->imu);
+    if (matches < 0) runtime->last_result = runtime->imu.last_result;
+    return matches;
 }
 
 void dds_runtime_socket_stats(ddsrt_3ds_socket_stats_t *stats) {

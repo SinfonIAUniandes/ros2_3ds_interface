@@ -29,7 +29,9 @@ typedef enum {
     UI_ACTION_NEXT_ITEM = 1u << 7,
     UI_ACTION_PREVIOUS_ITEM = 1u << 8,
     UI_ACTION_ACTIVATE = 1u << 9,
-    UI_ACTION_BACK = 1u << 10
+    UI_ACTION_BACK = 1u << 10,
+    UI_ACTION_TOGGLE_CHATTER_TOPIC = 1u << 11,
+    UI_ACTION_TOGGLE_IMU_TOPIC = 1u << 12
 } ui_action;
 
 typedef struct {
@@ -70,6 +72,8 @@ typedef struct {
     bool external_config;
     bool static_peer;
     bool publishing;
+    bool chatter_topic_enabled;
+    bool imu_topic_enabled;
     bool listening;
     bool log_has_error;
     bool probe_socket_ready;
@@ -95,6 +99,13 @@ typedef struct {
     int32_t reader_qos_rejections;
     uint32_t writer_qos_policy;
     uint32_t reader_qos_policy;
+    bool imu_enabled;
+    bool imu_sensors_enabled;
+    uint32_t imu_publish_hz;
+    uint64_t imu_transmitted;
+    int32_t imu_writer_matches;
+    double imu_angular_velocity[3];
+    double imu_linear_acceleration[3];
     uint32_t rtps_tx_multicast;
     uint32_t rtps_tx_unicast;
     uint32_t rtps_rx_total;

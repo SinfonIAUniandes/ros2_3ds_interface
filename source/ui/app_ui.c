@@ -104,6 +104,10 @@ ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch) {
         if (actions & UI_ACTION_PREVIOUS_ITEM) g_ui.selected_topic =
             g_ui.selected_topic == 0 ? (uint8_t)(ui_topic_count - 1)
                                      : (uint8_t)(g_ui.selected_topic - 1);
+        if (actions & UI_ACTION_ACTIVATE) {
+            actions |= g_ui.selected_topic == 0 ? UI_ACTION_TOGGLE_CHATTER_TOPIC
+                                                 : UI_ACTION_TOGGLE_IMU_TOPIC;
+        }
     } else if (g_ui.view == UI_VIEW_MENU) {
         if (actions & UI_ACTION_NEXT_ITEM) g_ui.selected_menu_item = (g_ui.selected_menu_item + 1) % 3;
         if (actions & UI_ACTION_PREVIOUS_ITEM) g_ui.selected_menu_item =

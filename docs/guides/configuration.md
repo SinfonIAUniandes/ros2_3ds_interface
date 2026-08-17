@@ -19,6 +19,9 @@ not require rebuilding the application.
 | `send_interval_ms` | `1000` | Automatic chatter publication interval |
 | `domain_id` | `0` | DDS/ROS domain, from 0 through 232 |
 | `dds_enabled` | `1` | Enables or disables the DDS runtime |
+| `imu_enabled` | `1` | Enables the motion sensors and IMU writer |
+| `imu_publish_hz` | `50` | IMU publication rate, from 1 through 100 Hz |
+| `imu_accel_mps2_per_count` | `0.01915361328125` | Accelerometer calibration scale |
 
 Leave `peer_ip` empty for automatic multicast and subnet-broadcast discovery.
 
@@ -32,6 +35,9 @@ port=17650
 send_interval_ms=1000
 domain_id=0
 dds_enabled=1
+imu_enabled=1
+imu_publish_hz=50
+imu_accel_mps2_per_count=0.01915361328125
 ```
 
 Replace `192.0.2.10` with the physical LAN address of one ROS 2 host. Do not

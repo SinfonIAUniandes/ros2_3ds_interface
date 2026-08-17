@@ -49,10 +49,12 @@ fail:
 }
 
 bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
-                        dds_entity_t chatter_writer, dds_entity_t chatter_reader) {
+                        dds_entity_t chatter_writer, dds_entity_t chatter_reader,
+                        dds_entity_t imu_writer) {
     dds_guid_t participant_guid;
     dds_guid_t writer_guid;
     dds_guid_t reader_guid;
+    dds_guid_t imu_writer_guid;
     graph->last_result = dds_get_guid(participant, &participant_guid);
     if (graph->last_result != DDS_RETCODE_OK) {
         return false;
@@ -65,13 +67,21 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
     if (graph->last_result != DDS_RETCODE_OK) {
         return false;
     }
+    bool has_imu_writer = imu_writer > DDS_ENTITY_NIL;
+    if (has_imu_writer) {
+        graph->last_result = dds_get_guid(imu_writer, &imu_writer_guid);
+        if (graph->last_result != DDS_RETCODE_OK) return false;
+    }
 
-    rmw_dds_common_msg_dds__Gid_ writer_gid = { { 0 } };
+    rmw_dds_common_msg_dds__Gid_ writer_gids[2] = { { { 0 } }, { { 0 } } };
     rmw_dds_common_msg_dds__Gid_ reader_gid = { { 0 } };
     rmw_dds_common_msg_dds__NodeEntitiesInfo_ node = { 0 };
     rmw_dds_common_msg_dds__ParticipantEntitiesInfo_ sample = { 0 };
     memcpy(sample.gid.data, participant_guid.v, sizeof(sample.gid.data));
-    memcpy(writer_gid.data, writer_guid.v, sizeof(writer_gid.data));
+    memcpy(writer_gids[0].data, writer_guid.v, sizeof(writer_gids[0].data));
+    if (has_imu_writer) {
+        memcpy(writer_gids[1].data, imu_writer_guid.v, sizeof(writer_gids[1].data));
+    }
     memcpy(reader_gid.data, reader_guid.v, sizeof(reader_gid.data));
     snprintf(node.node_namespace, sizeof(node.node_namespace), "%s", ROS2_GRAPH_NODE_NAMESPACE);
     snprintf(node.node_name, sizeof(node.node_name), "%s", ROS2_GRAPH_NODE_NAME);
@@ -79,9 +89,9 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
     node.reader_gid_seq._length = 1;
     node.reader_gid_seq._buffer = &reader_gid;
     node.reader_gid_seq._release = false;
-    node.writer_gid_seq._maximum = 1;
-    node.writer_gid_seq._length = 1;
-    node.writer_gid_seq._buffer = &writer_gid;
+    node.writer_gid_seq._maximum = has_imu_writer ? 2 : 1;
+    node.writer_gid_seq._length = has_imu_writer ? 2 : 1;
+    node.writer_gid_seq._buffer = writer_gids;
     node.writer_gid_seq._release = false;
     sample.node_entities_info_seq._maximum = 1;
     sample.node_entities_info_seq._length = 1;

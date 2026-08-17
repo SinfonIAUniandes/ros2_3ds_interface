@@ -24,7 +24,9 @@
 #define STATUS_REFRESH_MS 500
 #define GRAPH_REFRESH_MS 5000
 #define RTPS_LOG_INTERVAL_MS 5000
-#define APP_BUILD_ID "20260816-modular-ui"
+#define APP_BUILD_ID "20260816-topic-controls"
+#define DEFAULT_IMU_PUBLISH_HZ 50
+#define DEFAULT_IMU_ACCEL_SCALE (9.80665 / 512.0)
 
 typedef struct {
     char peer_ip[INET_ADDRSTRLEN];
@@ -33,6 +35,9 @@ typedef struct {
     u32 domain_id;
     bool dds_enabled;
     bool peer_ip_invalid;
+    bool imu_enabled;
+    u32 imu_publish_hz;
+    double imu_acceleration_scale;
 } probe_config;
 
 typedef struct {
@@ -71,6 +76,9 @@ static void load_config_defaults(probe_config *config) {
     config->send_interval_ms = DEFAULT_SEND_INTERVAL_MS;
     config->domain_id = 0;
     config->dds_enabled = true;
+    config->imu_enabled = true;
+    config->imu_publish_hz = DEFAULT_IMU_PUBLISH_HZ;
+    config->imu_acceleration_scale = DEFAULT_IMU_ACCEL_SCALE;
 }
 
 static bool load_config_file(probe_config *config, const char *path) {
@@ -123,6 +131,18 @@ static bool load_config_file(probe_config *config, const char *path) {
             }
         } else if (strcmp(key, "dds_enabled") == 0) {
             config->dds_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "imu_enabled") == 0) {
+            config->imu_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "imu_publish_hz") == 0) {
+            long publish_hz = strtol(value, NULL, 10);
+            if (publish_hz >= 1 && publish_hz <= 100) {
+                config->imu_publish_hz = (u32)publish_hz;
+            }
+        } else if (strcmp(key, "imu_accel_mps2_per_count") == 0) {
+            double scale = strtod(value, NULL);
+            if (scale > 0.0 && scale < 1.0) {
+                config->imu_acceleration_scale = scale;
+            }
         }
     }
     fclose(file);
@@ -328,6 +348,7 @@ int main(void) {
     int32_t last_reader_matches = -2;
     int32_t last_writer_qos_rejections = -2;
     int32_t last_reader_qos_rejections = -2;
+    int32_t last_imu_matches = -2;
     int32_t last_send_errno = 0;
     int32_t last_recv_errno = 0;
     int32_t last_multicast_if_errno = 0;
@@ -340,10 +361,18 @@ int main(void) {
         }
         app_log_write(APP_LOG_INFO, "DDS compatibility: RTPS 2.1");
         bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
-                                         broadcast_ip_text);
+                                         broadcast_ip_text, config.imu_enabled,
+                                         config.imu_acceleration_scale);
         app_log_write(started ? APP_LOG_INFO : APP_LOG_ERROR, "DDS participant %s rc=%ld %s",
                       started ? "started" : "failed", (long)dds.last_result,
                       dds_runtime_error_text(&dds));
+        if (started && config.imu_enabled && !dds.imu.sensors_enabled) {
+            app_log_write(APP_LOG_WARN,
+                          "IMU unavailable accel=0x%08lX gyro=0x%08lX coeff=0x%08lX",
+                          (unsigned long)dds.imu.accelerometer_result,
+                          (unsigned long)dds.imu.gyroscope_result,
+                          (unsigned long)dds.imu.coefficient_result);
+        }
     }
 
     struct sockaddr_in multicast_destination;
@@ -359,6 +388,9 @@ int main(void) {
     bool peer_valid = config.peer_ip[0] && inet_pton(AF_INET, config.peer_ip, &unicast_destination.sin_addr) == 1;
 
     bool chatter_publishing = false;
+    bool chatter_topic_enabled = true;
+    bool imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
+                             dds.imu.writer > DDS_ENTITY_NIL;
     bool chatter_listening = true;
     u32 chatter_sequence = 0;
     char last_published_message[65] = "No local message yet";
@@ -367,6 +399,8 @@ int main(void) {
     u64 next_graph_at = osGetTime() + GRAPH_REFRESH_MS;
     u64 next_status_at = 0;
     u64 next_rtps_log_at = 0;
+    u64 next_imu_at = osGetTime();
+    const u64 imu_interval_ms = 1000 / config.imu_publish_hz;
     ddsrt_3ds_socket_stats_t socket_stats;
     memset(&socket_stats, 0, sizeof(socket_stats));
     while (aptMainLoop()) {
@@ -381,19 +415,36 @@ int main(void) {
         }
 
         u64 now = osGetTime();
+        if (actions & UI_ACTION_TOGGLE_CHATTER_TOPIC) {
+            chatter_topic_enabled = !chatter_topic_enabled;
+            app_log_write(APP_LOG_INFO, "Chatter publisher %s",
+                          chatter_topic_enabled ? "enabled" : "disabled");
+        }
+        if (actions & UI_ACTION_TOGGLE_IMU_TOPIC) {
+            imu_topic_enabled = !imu_topic_enabled;
+            app_log_write(APP_LOG_INFO, "IMU publisher %s",
+                          imu_topic_enabled ? "enabled" : "disabled");
+        }
         if (actions & UI_ACTION_PUBLISH_ONCE) {
-            publish_chatter(&dds, &chatter_sequence, last_published_message);
+            if (chatter_topic_enabled) {
+                publish_chatter(&dds, &chatter_sequence, last_published_message);
+            }
+            if (imu_topic_enabled && !dds_runtime_publish_imu(&dds, now)) {
+                app_log_write(APP_LOG_ERROR, "ROS IMU TX failed %s", dds_runtime_error_text(&dds));
+            }
         }
         if (actions & UI_ACTION_TOGGLE_PUBLISHING) {
             chatter_publishing = !chatter_publishing;
             next_chatter_at = now;
-            app_log_write(APP_LOG_INFO, "ROS 1Hz chatter %s", chatter_publishing ? "enabled" : "disabled");
+            next_imu_at = now;
+            app_log_write(APP_LOG_INFO, "All topic publishing %s",
+                          chatter_publishing ? "started" : "stopped");
         }
         if (actions & UI_ACTION_TOGGLE_LISTENER) {
             chatter_listening = !chatter_listening;
             app_log_write(APP_LOG_INFO, "ROS listener %s", chatter_listening ? "enabled" : "disabled");
         }
-        if (chatter_publishing && now >= next_chatter_at) {
+        if (chatter_publishing && chatter_topic_enabled && now >= next_chatter_at) {
             publish_chatter(&dds, &chatter_sequence, last_published_message);
             next_chatter_at = now + config.send_interval_ms;
         }
@@ -404,6 +455,16 @@ int main(void) {
                 app_log_write(APP_LOG_ERROR, "ROS graph failed %s", dds_runtime_error_text(&dds));
             }
             next_graph_at = now + GRAPH_REFRESH_MS;
+        }
+        if (chatter_publishing && imu_topic_enabled && dds.running && dds.imu.sensors_enabled &&
+            dds.imu.writer > DDS_ENTITY_NIL &&
+            now >= next_imu_at) {
+            if (!dds_runtime_publish_imu(&dds, now)) {
+                app_log_write(APP_LOG_ERROR, "ROS IMU TX failed %s", dds_runtime_error_text(&dds));
+            }
+            do {
+                next_imu_at += imu_interval_ms;
+            } while (next_imu_at <= now);
         }
         int32_t graph_matches = dds_runtime_graph_writer_matches(&dds);
         if (graph_matches != last_graph_matches) {
@@ -434,6 +495,11 @@ int main(void) {
                               dds_runtime_error_text(&dds));
             }
             last_reader_matches = reader_matches;
+        }
+        int32_t imu_matches = dds_runtime_imu_writer_matches(&dds);
+        if (imu_matches != last_imu_matches) {
+            app_log_write(APP_LOG_INFO, "ROS IMU writer match count=%ld", (long)imu_matches);
+            last_imu_matches = imu_matches;
         }
         uint32_t writer_qos_policy = 0;
         int32_t writer_qos_rejections = dds_runtime_chatter_writer_incompatible_qos(
@@ -519,6 +585,8 @@ int main(void) {
             .external_config = external_config_loaded,
             .static_peer = config.peer_ip[0] != '\0',
             .publishing = chatter_publishing,
+            .chatter_topic_enabled = chatter_topic_enabled,
+            .imu_topic_enabled = imu_topic_enabled,
             .listening = chatter_listening,
             .log_has_error = app_log_has_error(),
             .probe_socket_ready = state.socket_fd >= 0,
@@ -544,6 +612,19 @@ int main(void) {
             .reader_qos_rejections = reader_qos_rejections,
             .writer_qos_policy = writer_qos_policy,
             .reader_qos_policy = reader_qos_policy,
+            .imu_enabled = config.imu_enabled,
+            .imu_sensors_enabled = dds.imu.sensors_enabled,
+            .imu_publish_hz = config.imu_publish_hz,
+            .imu_transmitted = dds_runtime_imu_transmitted(&dds),
+            .imu_writer_matches = imu_matches,
+            .imu_angular_velocity = {
+                dds.imu.last_angular_velocity[0], dds.imu.last_angular_velocity[1],
+                dds.imu.last_angular_velocity[2]
+            },
+            .imu_linear_acceleration = {
+                dds.imu.last_linear_acceleration[0], dds.imu.last_linear_acceleration[1],
+                dds.imu.last_linear_acceleration[2]
+            },
             .rtps_tx_multicast = socket_stats.tx_multicast,
             .rtps_tx_unicast = socket_stats.tx_unicast,
             .rtps_rx_total = socket_stats.rx_total,

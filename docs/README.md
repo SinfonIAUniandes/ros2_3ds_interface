@@ -28,6 +28,11 @@ Use these pages when operating or changing the project:
 - [Diagnostics and troubleshooting](guides/troubleshooting.md): screen fields,
   logs, common failures, and validation gates
 
+## Features
+
+- [IMU streaming](features/imu-streaming.md): sensor lifecycle, standard ROS
+  message mapping, units, calibration, and validation
+
 ## Suggested Paths
 
 **First-time user:** root README -> runtime configuration -> troubleshooting.

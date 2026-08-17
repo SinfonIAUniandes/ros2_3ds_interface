@@ -40,6 +40,7 @@ ROS 2 command-line tools build their graph from the
 - participant GID
 - `/chatter` writer GID
 - `/chatter` reader GID
+- `/imu/data_raw` writer GID
 
 The graph writer uses transient-local durability. The sample is published at
 startup and refreshed every five seconds.
@@ -54,5 +55,6 @@ targets.
 ## Current Boundary
 
 The project currently provides one publisher, one subscriber, and graph
-metadata. Services, actions, parameters, lifecycle nodes, and the full `rcl`
-API are outside the implemented runtime.
+metadata for chatter, plus a best-effort `sensor_msgs/msg/Imu` publisher.
+Services, actions, parameters, lifecycle nodes, and the full `rcl` API are
+outside the implemented runtime.

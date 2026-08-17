@@ -25,37 +25,43 @@ void ui_view_home_top(ui_context *ui, const ui_snapshot *snapshot) {
              (long)snapshot->dds_result, (long)snapshot->graph_matches);
 
     ui_panel(ui, 8, 141, 188, 82);
-    card_title(ui, 8, 141, "CHATTER");
+    card_title(ui, 8, 141, "CHATTER PUBLISHER");
     char tx[24];
     char rx[24];
     snprintf(tx, sizeof(tx), "%llu", (unsigned long long)snapshot->chatter_transmitted);
     snprintf(rx, sizeof(rx), "%llu", (unsigned long long)snapshot->chatter_received);
     ui_metric(ui, 17, 166, "SENT", tx, ui->theme.accent);
     ui_metric(ui, 94, 166, "RECEIVED", rx, ui->theme.success);
-    ui_textf(ui, 17, 207, 0.31f, ui->theme.muted, "Matches  pub %ld  sub %ld",
+    ui_textf(ui, 17, 207, 0.31f, ui->theme.muted, "%s  |  pub %ld  sub %ld",
+             snapshot->chatter_topic_enabled ? "Enabled" : "Disabled",
              (long)snapshot->writer_matches, (long)snapshot->reader_matches);
 
     ui_panel(ui, 204, 141, 188, 82);
-    card_title(ui, 204, 141, "ACTIVITY");
-    ui_badge(ui, 213, 166, snapshot->publishing ? "PUB ON" : "PUB OFF", snapshot->publishing);
+    card_title(ui, 204, 141, "PUBLISHING");
+    ui_badge(ui, 213, 166, snapshot->publishing ? "ALL ON" : "ALL OFF", snapshot->publishing);
     ui_badge(ui, 282, 166, snapshot->listening ? "SUB ON" : "SUB OFF", snapshot->listening);
-    ui_textf(ui, 213, 207, 0.31f, ui->theme.muted, "RTPS remote %lu  |  Log %s",
-             (unsigned long)snapshot->rtps_rx_remote, snapshot->log_has_error ? "warning" : "clean");
+    ui_textf(ui, 213, 207, 0.31f, ui->theme.muted, "IMU %s  |  RTPS %lu",
+             snapshot->imu_topic_enabled ? "enabled" : "disabled",
+             (unsigned long)snapshot->rtps_rx_remote);
 }
 
 void ui_view_home_bottom(ui_context *ui, const ui_snapshot *snapshot) {
-    ui_text(ui, 8, 38, 0.36f, ui->theme.muted, "Quick actions");
+    ui_text(ui, 8, 38, 0.36f, ui->theme.muted, "Publisher controls");
     const ui_controls *controls = app_ui_controls();
-    ui_button(ui, 8, 48, 148, 42, app_ui_control_label(controls->publish_once), "Publish once", false);
-    ui_button(ui, 164, 48, 148, 42, app_ui_control_label(controls->toggle_publishing), "Auto publish", snapshot->publishing);
+    ui_button(ui, 8, 48, 148, 42, app_ui_control_label(controls->publish_once), "Publish enabled once", false);
+    ui_button(ui, 164, 48, 148, 42, app_ui_control_label(controls->toggle_publishing),
+              snapshot->publishing ? "Stop all publishing" : "Start all publishing", snapshot->publishing);
     ui_button(ui, 8, 98, 148, 42, app_ui_control_label(controls->toggle_listener), "Subscriber", snapshot->listening);
     ui_button(ui, 164, 98, 148, 42, app_ui_control_label(controls->send_probe), "UDP probe", false);
 
     ui_panel(ui, 8, 151, 304, 59);
-    ui_text(ui, 18, 161, 0.34f, ui->theme.muted, "Current topic");
-    ui_text(ui, 18, 179, 0.48f, ui->theme.text, "/chatter");
-    ui_textf(ui, 128, 181, 0.32f, ui->theme.muted, "%lu ms interval",
-             (unsigned long)snapshot->send_interval_ms);
+    ui_text(ui, 18, 161, 0.34f, ui->theme.muted, "Enabled publishers");
+    ui_textf(ui, 18, 179, 0.43f, ui->theme.text, "Chatter %s  |  IMU %s",
+             snapshot->chatter_topic_enabled ? "ON" : "OFF",
+             snapshot->imu_topic_enabled ? "ON" : "OFF");
+    ui_textf(ui, 18, 196, 0.31f, ui->theme.muted, "Chatter %lu ms  |  IMU %lu Hz",
+             (unsigned long)snapshot->send_interval_ms,
+             (unsigned long)snapshot->imu_publish_hz);
     ui_textf(ui, 8, 220, 0.30f, ui->theme.muted, "%s/%s tabs  |  Touch tabs  |  %s exit",
              app_ui_control_label(controls->previous_view), app_ui_control_label(controls->next_view),
              app_ui_control_label(controls->exit));

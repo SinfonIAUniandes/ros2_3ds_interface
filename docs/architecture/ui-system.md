@@ -54,6 +54,12 @@ Input follows the opposite direction. `app_ui_handle_input` returns a bitmask of
 This keeps rendering modules deterministic and makes them easy to test or
 replace.
 
+Publisher state has two levels. Home controls the global scheduler: it can
+publish all enabled topics once or start/stop periodic publishing for all of
+them. Topics controls whether an individual publisher is enabled. A disabled
+topic remains discoverable, but its scheduler and one-shot publication are
+skipped.
+
 ## Adding a View
 
 1. Add a value to `ui_view_id` in `include/ui/app_ui.h`.
@@ -77,6 +83,8 @@ Runtime ownership should remain outside the UI:
 5. Render the module in Topics, Services, or a dedicated registered view.
 
 Avoid calling `dds_write`, `dds_take`, or socket functions from view files.
+The IMU entry demonstrates this split: `ros2_imu.c` owns HID and DDS, while the
+Topics view only reads vectors and counters from `ui_snapshot`.
 
 ## Theme Configuration
 

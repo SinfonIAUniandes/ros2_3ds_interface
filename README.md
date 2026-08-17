@@ -2,8 +2,8 @@
 
 A native ROS 2 publisher and subscriber for Nintendo 3DS homebrew. The app
 connects directly to DDS over Wi-Fi, publishes and receives
-`std_msgs/msg/String` on `/chatter`, and appears in the ROS 2 graph without an
-agent or bridge.
+`std_msgs/msg/String` on `/chatter`, streams `sensor_msgs/msg/Imu` on
+`/imu/data_raw`, and appears in the ROS 2 graph without an agent or bridge.
 
 Bidirectional communication has been validated with ROS 2 Jazzy and
 `rmw_cyclonedds_cpp` on Windows.
@@ -63,14 +63,21 @@ ros2 topic pub --rate 1 /chatter std_msgs/msg/String '{data: Hello from ROS 2}'
 
 The 3DS log should display `ROS REMOTE RX`.
 
+To inspect the motion sensors:
+
+```sh
+ros2 topic echo /imu/data_raw sensor_msgs/msg/Imu
+ros2 topic hz /imu/data_raw
+```
+
 ## Controls
 
 | Button | Action |
 | --- | --- |
 | Default binding | Action |
 | --- | --- |
-| A | Publish one message from Home; activate a Menu item |
-| B | Toggle publishing from Home; return from Menu subviews |
+| A | Publish every enabled topic once from Home; enable or disable the selected Topic |
+| B | Start or stop all enabled publishers from Home; return from Menu subviews |
 | Y | Toggle the subscriber from Home |
 | X | Send a diagnostic UDP probe from Home |
 | L / R | Change main tab |
@@ -79,6 +86,11 @@ The 3DS log should display `ROS REMOTE RX`.
 
 Bindings are editable before building in `romfs/ui/controls.ini`, or can be
 overridden from `SD:/3ds/ros2_3ds_interface/controls.ini`.
+
+The Topics tab controls publisher availability independently. Select a topic
+with Up/Down and use the activation binding (A by default) to enable or disable
+its publisher. Disabling a topic keeps its DDS endpoint available for discovery
+but stops its samples from being published.
 
 ## Network Setup
 
@@ -115,10 +127,14 @@ Start with the [documentation index](docs/README.md).
 ## Current Scope
 
 - `/chatter` publisher and subscriber using `std_msgs/msg/String`
+- `/imu/data_raw` publisher using `sensor_msgs/msg/Imu`
 - ROS 2 graph publication for the 3DS node and endpoints
 - IPv4 UDP transport on the local network
 - Multicast, subnet-broadcast, and optional static-peer discovery
 - Persistent diagnostic logs on the SD card
+
+See [IMU streaming](docs/features/imu-streaming.md) for units, frame semantics,
+frequency, and calibration details.
 
 Services, actions, IPv6, DDS Security, and routed discovery are not currently
 implemented.
