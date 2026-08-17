@@ -7,8 +7,8 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET := ros2_3ds_interface
 BUILD := build
-SOURCES := source source/logging
-INCLUDES := include include/logging
+SOURCES := source source/logging generated/ros_graph generated/ros_types
+INCLUDES := include include/logging generated/ros_graph generated/ros_types
 ROMFS := romfs
 CYCLONEDDS_SOURCE ?= $(abspath ../cyclonedds_3ds)
 CYCLONEDDS_BUILD ?= $(CYCLONEDDS_SOURCE)/build-3ds

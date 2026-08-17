@@ -17,11 +17,13 @@
 
 #define SOC_BUFFER_SIZE 0x100000
 #define MULTICAST_GROUP "239.255.0.1"
-#define DEFAULT_PORT 7410
+#define DEFAULT_PORT 17650
 #define DEFAULT_SEND_INTERVAL_MS 1000
 #define MAX_PACKET_SIZE 512
 #define STATUS_REFRESH_MS 500
-#define APP_BUILD_ID "20260816-iovec-sendmsg"
+#define GRAPH_REFRESH_MS 5000
+#define RTPS_LOG_INTERVAL_MS 5000
+#define APP_BUILD_ID "20260816-static-peer"
 
 typedef struct {
     char peer_ip[INET_ADDRSTRLEN];
@@ -29,6 +31,7 @@ typedef struct {
     u32 send_interval_ms;
     u32 domain_id;
     bool dds_enabled;
+    bool peer_ip_invalid;
 } probe_config;
 
 typedef struct {
@@ -61,16 +64,18 @@ static char *trim(char *text) {
     return text;
 }
 
-static void load_config(probe_config *config) {
+static void load_config_defaults(probe_config *config) {
     memset(config, 0, sizeof(*config));
     config->port = DEFAULT_PORT;
     config->send_interval_ms = DEFAULT_SEND_INTERVAL_MS;
     config->domain_id = 0;
     config->dds_enabled = true;
+}
 
-    FILE *file = fopen("romfs:/config.ini", "r");
+static bool load_config_file(probe_config *config, const char *path) {
+    FILE *file = fopen(path, "r");
     if (!file) {
-        return;
+        return false;
     }
 
     char line[128];
@@ -89,7 +94,17 @@ static void load_config(probe_config *config) {
         char *key = trim(entry);
         char *value = trim(separator + 1);
         if (strcmp(key, "peer_ip") == 0) {
-            strncpy(config->peer_ip, value, sizeof(config->peer_ip) - 1);
+            struct in_addr peer_address;
+            if (*value != '\0' && inet_pton(AF_INET, value, &peer_address) == 1) {
+                strncpy(config->peer_ip, value, sizeof(config->peer_ip) - 1);
+                config->peer_ip_invalid = false;
+            } else if (*value != '\0') {
+                config->peer_ip[0] = '\0';
+                config->peer_ip_invalid = true;
+            } else {
+                config->peer_ip[0] = '\0';
+                config->peer_ip_invalid = false;
+            }
         } else if (strcmp(key, "port") == 0) {
             long port = strtol(value, NULL, 10);
             if (port > 0 && port <= 65535) {
@@ -110,6 +125,7 @@ static void load_config(probe_config *config) {
         }
     }
     fclose(file);
+    return true;
 }
 
 static int set_nonblocking(int socket_fd) {
@@ -229,18 +245,42 @@ static void receive_probes(probe_state *state) {
         app_log_write(app_level, "DDS %s", message);
     }
 
-    static void draw_static_status(PrintConsole *console, const char *local_ip,
-                       bool network_ready, int soc_result) {
+    static void chatter_receive_callback(void *context, const char *data) {
+        (void)context;
+        app_log_write(APP_LOG_INFO, "ROS REMOTE RX %s", data);
+    }
+
+    static void publish_chatter(dds_runtime *dds, u32 *sequence) {
+        char payload[64];
+        snprintf(payload, sizeof(payload), "Hello from 3DS: %lu", (unsigned long)(*sequence)++);
+        if (dds_runtime_publish_chatter(dds, payload)) {
+            app_log_write(APP_LOG_INFO, "ROS TX %s", payload);
+        } else {
+            app_log_write(APP_LOG_ERROR, "ROS TX failed %s", dds_runtime_error_text(dds));
+        }
+    }
+
+    static void draw_static_status(PrintConsole *console, const probe_config *config,
+                       const char *local_ip, bool network_ready, int soc_result) {
         consoleSelect(console);
         printf("\x1b[0;0HROS 2 / DDS native runtime        \n");
         printf("\x1b[1;0HIP %-15s  soc %-4s  net %-4s  \n", local_ip,
             soc_result == 0 ? "OK" : "FAIL", network_ready ? "OK" : "FAIL");
-        printf("\x1b[10;0HLog: /3ds/ros2_3ds_interface/logs\n");
-        printf("\x1b[11;0Hruntime-YYYYMMDD.log on SD         \n");
+        printf("\x1b[10;0HLog: /3ds/ros2_3ds_interface/logs/\n");
+        printf("\x1b[11;0HYYYYMMDD/session-HHMMSS-mmm.log     \n");
+        if (config->peer_ip[0] != '\0') {
+            printf("\x1b[16;0HDISC: PEER %s\n", config->peer_ip);
+        } else {
+            printf("\x1b[16;0HDISC: MCAST\n");
+        }
+        printf("\x1b[17;0H%.39s\n", APP_BUILD_ID);
     }
 
     static void draw_dynamic_status(PrintConsole *console, const probe_config *config,
-                        const probe_state *state, const dds_runtime *dds) {
+                        const probe_state *state, dds_runtime *dds, bool chatter_publishing,
+                        bool chatter_listening, int32_t graph_matches, int32_t writer_matches,
+                        int32_t reader_matches, int32_t writer_qos_rejections,
+                        int32_t reader_qos_rejections, const ddsrt_3ds_socket_stats_t *socket_stats) {
         consoleSelect(console);
         printf("\x1b[2;0HDDS %-7s domain %-3lu rc %-8ld\n", dds_runtime_status(dds),
             (unsigned long)config->domain_id, (long)dds->last_result);
@@ -248,13 +288,24 @@ static void receive_probes(probe_state *state) {
         printf("\x1b[4;0HUDP %-4s bind %-4s join %-4s loop %-4s\n",
             state->socket_fd >= 0 ? "OK" : "FAIL", state->bind_error == 0 ? "OK" : "FAIL",
             state->membership_joined ? "OK" : "FAIL", state->loopback_error == 0 ? "OK" : "FAIL");
-        printf("\x1b[5;0HProbe %u every %lums peer %.15s\n", config->port,
-            (unsigned long)config->send_interval_ms, config->peer_ip[0] ? config->peer_ip : "disabled");
-        printf("\x1b[6;0HTX M:%-6lu U:%-6lu RX:%-6lu     \n", (unsigned long)state->multicast_sent,
+        printf("\x1b[5;0HROS TX:%-8llu RX:%-8llu\n",
+            (unsigned long long)dds_runtime_chatter_transmitted(dds),
+            (unsigned long long)dds_runtime_chatter_received(dds));
+        printf("\x1b[6;0HGRAPH P:%-8llu M:%-14ld\n", (unsigned long long)dds_runtime_graph_published(dds),
+            (long)graph_matches);
+        printf("\x1b[7;0HMATCH W:%ld R:%ld QW:%ld QR:%ld\n", (long)writer_matches,
+            (long)reader_matches, (long)writer_qos_rejections, (long)reader_qos_rejections);
+        printf("\x1b[8;0HA send B 1Hz:%-3s Y listen:%-3s X UDP\n",
+            chatter_publishing ? "ON" : "OFF", chatter_listening ? "ON" : "OFF");
+        printf("\x1b[9;0HUDP M:%-6lu U:%-6lu RX:%-6lu\n", (unsigned long)state->multicast_sent,
             (unsigned long)state->unicast_sent, (unsigned long)state->received);
-        printf("\x1b[7;0HLast %-32.32s\n", state->last_sender);
-        printf("\x1b[8;0HData %-32.32s\n", state->last_payload);
-        printf("\x1b[9;0HLog %-5s A send START exit           \n", app_log_has_error() ? "ERROR" : "OK");
+        printf("\x1b[12;0HRTPS TXM:%lu TXU:%lu\n",
+            (unsigned long)socket_stats->tx_multicast, (unsigned long)socket_stats->tx_unicast);
+        printf("\x1b[13;0H     RX:%lu REM:%lu\n",
+            (unsigned long)socket_stats->rx_total, (unsigned long)socket_stats->rx_remote);
+        printf("\x1b[14;0HERR TX:%ld RX:%ld MIF:%ld\n", (long)socket_stats->last_send_errno,
+            (long)socket_stats->last_recv_errno, (long)socket_stats->multicast_if_errno);
+        printf("\x1b[15;0HLast %-32.32s\n", state->last_sender);
 }
 
 int main(void) {
@@ -268,7 +319,19 @@ int main(void) {
     app_log_write(APP_LOG_INFO, "Application started build=%s", APP_BUILD_ID);
 
     probe_config config;
-    load_config(&config);
+    load_config_defaults(&config);
+    load_config_file(&config, "romfs:/config.ini");
+    bool external_config_loaded = load_config_file(&config, "sdmc:/3ds/ros2_3ds_interface/config.ini");
+    app_log_write(APP_LOG_INFO, external_config_loaded ? "External SD config loaded"
+                  : "Using built-in ROMFS config/defaults");
+    if (config.peer_ip_invalid) {
+        app_log_write(APP_LOG_WARN, "Invalid peer_ip ignored; using multicast discovery");
+    }
+    if (config.peer_ip[0] != '\0') {
+        app_log_write(APP_LOG_INFO, "DDS discovery mode: multicast + static peer %s", config.peer_ip);
+    } else {
+        app_log_write(APP_LOG_INFO, "DDS discovery mode: multicast only");
+    }
 
     void *soc_buffer = memalign(0x1000, SOC_BUFFER_SIZE);
     int soc_result = soc_buffer ? (int)socInit((u32 *)soc_buffer, SOC_BUFFER_SIZE) : -1;
@@ -284,7 +347,7 @@ int main(void) {
     if (ip_text) {
         strncpy(local_ip_text, ip_text, sizeof(local_ip_text) - 1);
     }
-    draw_static_status(&status_console, local_ip_text, network_ready, soc_result);
+    draw_static_status(&status_console, &config, local_ip_text, network_ready, soc_result);
 
     probe_state state;
     memset(&state, 0, sizeof(state));
@@ -299,8 +362,17 @@ int main(void) {
     dds_runtime dds;
     dds_runtime_init(&dds);
     dds_runtime_set_log_sink(dds_log_callback, NULL);
+    int32_t last_graph_matches = -2;
+    int32_t last_writer_matches = -2;
+    int32_t last_reader_matches = -2;
+    int32_t last_writer_qos_rejections = -2;
+    int32_t last_reader_qos_rejections = -2;
+    int32_t last_send_errno = 0;
+    int32_t last_recv_errno = 0;
+    int32_t last_multicast_if_errno = 0;
     if (network_ready && config.dds_enabled) {
-        bool started = dds_runtime_start(&dds, config.domain_id);
+        app_log_write(APP_LOG_INFO, "DDS compatibility: RTPS 2.1");
+        bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip);
         app_log_write(started ? APP_LOG_INFO : APP_LOG_ERROR, "DDS participant %s rc=%ld %s",
                       started ? "started" : "failed", (long)dds.last_result,
                       dds_runtime_error_text(&dds));
@@ -318,8 +390,13 @@ int main(void) {
     unicast_destination.sin_port = htons(config.port);
     bool peer_valid = config.peer_ip[0] && inet_pton(AF_INET, config.peer_ip, &unicast_destination.sin_addr) == 1;
 
-    u64 next_send_at = 0;
+    bool chatter_publishing = false;
+    bool chatter_listening = true;
+    u32 chatter_sequence = 0;
+    u64 next_chatter_at = 0;
+    u64 next_graph_at = osGetTime() + GRAPH_REFRESH_MS;
     u64 next_status_at = 0;
+    u64 next_rtps_log_at = 0;
     while (aptMainLoop()) {
         hidScanInput();
         u32 keys_down = hidKeysDown();
@@ -329,19 +406,121 @@ int main(void) {
         }
 
         u64 now = osGetTime();
-        if (state.socket_fd >= 0 && (now >= next_send_at || (keys_down & KEY_A))) {
+        if (keys_down & KEY_A) {
+            publish_chatter(&dds, &chatter_sequence);
+        }
+        if (keys_down & KEY_B) {
+            chatter_publishing = !chatter_publishing;
+            next_chatter_at = now;
+            app_log_write(APP_LOG_INFO, "ROS 1Hz chatter %s", chatter_publishing ? "enabled" : "disabled");
+        }
+        if (keys_down & KEY_Y) {
+            chatter_listening = !chatter_listening;
+            app_log_write(APP_LOG_INFO, "ROS listener %s", chatter_listening ? "enabled" : "disabled");
+        }
+        if (chatter_publishing && now >= next_chatter_at) {
+            publish_chatter(&dds, &chatter_sequence);
+            next_chatter_at = now + config.send_interval_ms;
+        }
+        if (dds.running && now >= next_graph_at) {
+            if (dds_runtime_refresh_graph(&dds)) {
+                app_log_write(APP_LOG_DEBUG, "ROS graph refreshed");
+            } else {
+                app_log_write(APP_LOG_ERROR, "ROS graph failed %s", dds_runtime_error_text(&dds));
+            }
+            next_graph_at = now + GRAPH_REFRESH_MS;
+        }
+        int32_t graph_matches = dds_runtime_graph_writer_matches(&dds);
+        if (graph_matches != last_graph_matches) {
+            if (graph_matches >= 0) {
+                app_log_write(APP_LOG_INFO, "ROS graph match count=%ld", (long)graph_matches);
+            } else {
+                app_log_write(APP_LOG_ERROR, "ROS graph match count=%ld %s", (long)graph_matches,
+                              dds_runtime_error_text(&dds));
+            }
+            last_graph_matches = graph_matches;
+        }
+        int32_t writer_matches = dds_runtime_chatter_writer_matches(&dds);
+        if (writer_matches != last_writer_matches) {
+            if (writer_matches >= 0) {
+                app_log_write(APP_LOG_INFO, "ROS writer match count=%ld", (long)writer_matches);
+            } else {
+                app_log_write(APP_LOG_ERROR, "ROS writer match count=%ld %s", (long)writer_matches,
+                              dds_runtime_error_text(&dds));
+            }
+            last_writer_matches = writer_matches;
+        }
+        int32_t reader_matches = dds_runtime_chatter_reader_matches(&dds);
+        if (reader_matches != last_reader_matches) {
+            if (reader_matches >= 0) {
+                app_log_write(APP_LOG_INFO, "ROS reader match count=%ld", (long)reader_matches);
+            } else {
+                app_log_write(APP_LOG_ERROR, "ROS reader match count=%ld %s", (long)reader_matches,
+                              dds_runtime_error_text(&dds));
+            }
+            last_reader_matches = reader_matches;
+        }
+        uint32_t writer_qos_policy = 0;
+        int32_t writer_qos_rejections = dds_runtime_chatter_writer_incompatible_qos(
+            &dds, &writer_qos_policy);
+        if (writer_qos_rejections != last_writer_qos_rejections) {
+            if (writer_qos_rejections > 0) {
+                app_log_write(APP_LOG_WARN, "ROS writer incompatible QoS count=%ld policy=%lu",
+                              (long)writer_qos_rejections, (unsigned long)writer_qos_policy);
+            }
+            last_writer_qos_rejections = writer_qos_rejections;
+        }
+        uint32_t reader_qos_policy = 0;
+        int32_t reader_qos_rejections = dds_runtime_chatter_reader_incompatible_qos(
+            &dds, &reader_qos_policy);
+        if (reader_qos_rejections != last_reader_qos_rejections) {
+            if (reader_qos_rejections > 0) {
+                app_log_write(APP_LOG_WARN, "ROS reader incompatible QoS count=%ld policy=%lu",
+                              (long)reader_qos_rejections, (unsigned long)reader_qos_policy);
+            }
+            last_reader_qos_rejections = reader_qos_rejections;
+        }
+        if (state.socket_fd >= 0 && (keys_down & KEY_X)) {
             send_probe(&state, &multicast_destination, true);
             if (peer_valid) {
                 send_probe(&state, &unicast_destination, false);
             }
-            next_send_at = now + config.send_interval_ms;
         }
         if (state.socket_fd >= 0) {
             receive_probes(&state);
         }
+        if (chatter_listening) {
+            dds_runtime_poll_chatter(&dds, chatter_receive_callback, NULL);
+        }
 
         if (now >= next_status_at) {
-            draw_dynamic_status(&status_console, &config, &state, &dds);
+            ddsrt_3ds_socket_stats_t socket_stats;
+            dds_runtime_socket_stats(&socket_stats);
+            if (socket_stats.last_send_errno != last_send_errno ||
+                socket_stats.last_recv_errno != last_recv_errno) {
+                app_log_write(APP_LOG_WARN, "RTPS socket errno tx=%ld rx=%ld",
+                              (long)socket_stats.last_send_errno,
+                              (long)socket_stats.last_recv_errno);
+                last_send_errno = socket_stats.last_send_errno;
+                last_recv_errno = socket_stats.last_recv_errno;
+            }
+            if (socket_stats.multicast_if_errno != last_multicast_if_errno) {
+                app_log_write(APP_LOG_WARN,
+                              "RTPS IP_MULTICAST_IF errno=%ld; using active Wi-Fi route",
+                              (long)socket_stats.multicast_if_errno);
+                last_multicast_if_errno = socket_stats.multicast_if_errno;
+            }
+            if (now >= next_rtps_log_at) {
+                app_log_write(APP_LOG_INFO, "RTPS tx_m=%lu tx_u=%lu rx=%lu remote=%lu",
+                              (unsigned long)socket_stats.tx_multicast,
+                              (unsigned long)socket_stats.tx_unicast,
+                              (unsigned long)socket_stats.rx_total,
+                              (unsigned long)socket_stats.rx_remote);
+                next_rtps_log_at = now + RTPS_LOG_INTERVAL_MS;
+            }
+            draw_dynamic_status(&status_console, &config, &state, &dds, chatter_publishing,
+                                chatter_listening, graph_matches, writer_matches, reader_matches,
+                                writer_qos_rejections, reader_qos_rejections, &socket_stats);
             next_status_at = now + STATUS_REFRESH_MS;
         }
         app_log_render();
