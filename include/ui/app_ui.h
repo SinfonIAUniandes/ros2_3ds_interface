@@ -1,0 +1,88 @@
+#ifndef ROS2_3DS_APP_UI_H
+#define ROS2_3DS_APP_UI_H
+
+#include <3ds.h>
+
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef enum {
+    UI_VIEW_OVERVIEW,
+    UI_VIEW_TOPICS,
+    UI_VIEW_DIAGNOSTICS,
+    UI_VIEW_LOGS,
+    UI_VIEW_COUNT
+} ui_view_id;
+
+typedef enum {
+    UI_ACTION_NONE = 0,
+    UI_ACTION_PUBLISH_ONCE = 1u << 0,
+    UI_ACTION_TOGGLE_PUBLISHING = 1u << 1,
+    UI_ACTION_TOGGLE_LISTENER = 1u << 2,
+    UI_ACTION_SEND_PROBE = 1u << 3,
+    UI_ACTION_EXIT = 1u << 4
+} ui_action;
+
+typedef struct {
+    const char *build_id;
+    const char *local_ip;
+    const char *netmask;
+    const char *broadcast_ip;
+    const char *peer_ip;
+    const char *last_probe_sender;
+    const char *last_probe_payload;
+    const char *dds_status;
+    const char *dds_error;
+    const char *log_path;
+    uint32_t domain_id;
+    uint32_t send_interval_ms;
+    uint16_t probe_port;
+    int32_t soc_result;
+    int32_t dds_result;
+    bool network_ready;
+    bool dds_running;
+    bool dds_enabled;
+    bool external_config;
+    bool static_peer;
+    bool publishing;
+    bool listening;
+    bool log_has_error;
+    bool probe_socket_ready;
+    bool probe_membership_joined;
+    int32_t probe_socket_error;
+    int32_t probe_reuse_error;
+    int32_t probe_bind_error;
+    int32_t probe_nonblocking_error;
+    int32_t probe_membership_error;
+    int32_t probe_loopback_error;
+    int32_t probe_last_send_error;
+    int32_t probe_last_receive_error;
+    uint32_t probe_multicast_sent;
+    uint32_t probe_unicast_sent;
+    uint32_t probe_received;
+    uint64_t chatter_transmitted;
+    uint64_t chatter_received;
+    uint64_t graph_published;
+    int32_t graph_matches;
+    int32_t writer_matches;
+    int32_t reader_matches;
+    int32_t writer_qos_rejections;
+    int32_t reader_qos_rejections;
+    uint32_t writer_qos_policy;
+    uint32_t reader_qos_policy;
+    uint32_t rtps_tx_multicast;
+    uint32_t rtps_tx_unicast;
+    uint32_t rtps_rx_total;
+    uint32_t rtps_rx_remote;
+    int32_t rtps_last_send_errno;
+    int32_t rtps_last_recv_errno;
+    int32_t rtps_multicast_if_errno;
+} ui_snapshot;
+
+bool app_ui_init(void);
+void app_ui_exit(void);
+ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch);
+void app_ui_render(const ui_snapshot *snapshot);
+ui_view_id app_ui_current_view(void);
+
+#endif

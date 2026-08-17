@@ -14,6 +14,8 @@ Read these pages to understand the implementation:
    subnet broadcast, static peers, and RTPS ports.
 3. [ROS 2 integration](architecture/ros-integration.md) explains `/chatter`,
    generated type descriptors, QoS, and graph publication.
+4. [UI system](architecture/ui-system.md) explains views, snapshots, actions,
+   theme configuration, and extension points.
 
 ## Guides
 

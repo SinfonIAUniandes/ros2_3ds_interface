@@ -14,6 +14,7 @@
 
 #include "logging/app_log.h"
 #include "dds_runtime.h"
+#include "ui/app_ui.h"
 
 #define SOC_BUFFER_SIZE 0x100000
 #define MULTICAST_GROUP "239.255.0.1"
@@ -23,7 +24,7 @@
 #define STATUS_REFRESH_MS 500
 #define GRAPH_REFRESH_MS 5000
 #define RTPS_LOG_INTERVAL_MS 5000
-#define APP_BUILD_ID "20260816-subnet-discovery"
+#define APP_BUILD_ID "20260816-modular-ui"
 
 typedef struct {
     char peer_ip[INET_ADDRSTRLEN];
@@ -260,62 +261,17 @@ static void receive_probes(probe_state *state) {
         }
     }
 
-    static void draw_static_status(PrintConsole *console, const probe_config *config,
-                       const char *local_ip, bool network_ready, int soc_result) {
-        consoleSelect(console);
-        printf("\x1b[0;0HROS 2 / DDS native runtime        \n");
-        printf("\x1b[1;0HIP %-15s  soc %-4s  net %-4s  \n", local_ip,
-            soc_result == 0 ? "OK" : "FAIL", network_ready ? "OK" : "FAIL");
-        printf("\x1b[10;0HLog: /3ds/ros2_3ds_interface/logs/\n");
-        printf("\x1b[11;0HYYYYMMDD/session-HHMMSS-mmm.log     \n");
-        if (config->peer_ip[0] != '\0') {
-            printf("\x1b[16;0HDISC: PEER %s\n", config->peer_ip);
-        } else {
-            printf("\x1b[16;0HDISC: MCAST\n");
-        }
-        printf("\x1b[17;0H%.39s\n", APP_BUILD_ID);
-    }
-
-    static void draw_dynamic_status(PrintConsole *console, const probe_config *config,
-                        const probe_state *state, dds_runtime *dds, bool chatter_publishing,
-                        bool chatter_listening, int32_t graph_matches, int32_t writer_matches,
-                        int32_t reader_matches, int32_t writer_qos_rejections,
-                        int32_t reader_qos_rejections, const ddsrt_3ds_socket_stats_t *socket_stats) {
-        consoleSelect(console);
-        printf("\x1b[2;0HDDS %-7s domain %-3lu rc %-8ld\n", dds_runtime_status(dds),
-            (unsigned long)config->domain_id, (long)dds->last_result);
-        printf("\x1b[3;0H%-38.38s\n", dds_runtime_error_text(dds));
-        printf("\x1b[4;0HUDP %-4s bind %-4s join %-4s loop %-4s\n",
-            state->socket_fd >= 0 ? "OK" : "FAIL", state->bind_error == 0 ? "OK" : "FAIL",
-            state->membership_joined ? "OK" : "FAIL", state->loopback_error == 0 ? "OK" : "FAIL");
-        printf("\x1b[5;0HROS TX:%-8llu RX:%-8llu\n",
-            (unsigned long long)dds_runtime_chatter_transmitted(dds),
-            (unsigned long long)dds_runtime_chatter_received(dds));
-        printf("\x1b[6;0HGRAPH P:%-8llu M:%-14ld\n", (unsigned long long)dds_runtime_graph_published(dds),
-            (long)graph_matches);
-        printf("\x1b[7;0HMATCH W:%ld R:%ld QW:%ld QR:%ld\n", (long)writer_matches,
-            (long)reader_matches, (long)writer_qos_rejections, (long)reader_qos_rejections);
-        printf("\x1b[8;0HA send B 1Hz:%-3s Y listen:%-3s X UDP\n",
-            chatter_publishing ? "ON" : "OFF", chatter_listening ? "ON" : "OFF");
-        printf("\x1b[9;0HUDP M:%-6lu U:%-6lu RX:%-6lu\n", (unsigned long)state->multicast_sent,
-            (unsigned long)state->unicast_sent, (unsigned long)state->received);
-        printf("\x1b[12;0HRTPS TXM:%lu TXU:%lu\n",
-            (unsigned long)socket_stats->tx_multicast, (unsigned long)socket_stats->tx_unicast);
-        printf("\x1b[13;0H     RX:%lu REM:%lu\n",
-            (unsigned long)socket_stats->rx_total, (unsigned long)socket_stats->rx_remote);
-        printf("\x1b[14;0HERR TX:%ld RX:%ld MIF:%ld\n", (long)socket_stats->last_send_errno,
-            (long)socket_stats->last_recv_errno, (long)socket_stats->multicast_if_errno);
-        printf("\x1b[15;0HLast %-32.32s\n", state->last_sender);
-}
-
 int main(void) {
     gfxInitDefault();
-    PrintConsole status_console;
-    PrintConsole log_console;
-    consoleInit(GFX_TOP, &status_console);
-    consoleInit(GFX_BOTTOM, &log_console);
     romfsInit();
-    app_log_init(&log_console);
+    app_log_init();
+    if (!app_ui_init()) {
+        app_log_write(APP_LOG_ERROR, "Citro2D UI initialization failed");
+        app_log_close();
+        romfsExit();
+        gfxExit();
+        return 1;
+    }
     app_log_write(APP_LOG_INFO, "Application started build=%s", APP_BUILD_ID);
 
     probe_config config;
@@ -338,14 +294,15 @@ int main(void) {
     bool network_ready = soc_result == 0 && get_local_network(&local_ip, &netmask, &broadcast);
     const char *ip_text = network_ready ? inet_ntoa(local_ip) : NULL;
     char local_ip_text[INET_ADDRSTRLEN] = "unavailable";
+    char netmask_ip_text[INET_ADDRSTRLEN] = "unavailable";
     char broadcast_ip_text[INET_ADDRSTRLEN] = "";
     if (ip_text) {
         strncpy(local_ip_text, ip_text, sizeof(local_ip_text) - 1);
     }
     if (network_ready) {
+        inet_ntop(AF_INET, &netmask, netmask_ip_text, sizeof(netmask_ip_text));
         inet_ntop(AF_INET, &broadcast, broadcast_ip_text, sizeof(broadcast_ip_text));
     }
-    draw_static_status(&status_console, &config, local_ip_text, network_ready, soc_result);
 
     probe_state state;
     memset(&state, 0, sizeof(state));
@@ -402,24 +359,29 @@ int main(void) {
     u64 next_graph_at = osGetTime() + GRAPH_REFRESH_MS;
     u64 next_status_at = 0;
     u64 next_rtps_log_at = 0;
+    ddsrt_3ds_socket_stats_t socket_stats;
+    memset(&socket_stats, 0, sizeof(socket_stats));
     while (aptMainLoop()) {
         hidScanInput();
         u32 keys_down = hidKeysDown();
-        if (keys_down & KEY_START) {
+        touchPosition touch;
+        hidTouchRead(&touch);
+        ui_action actions = app_ui_handle_input(keys_down, &touch);
+        if (actions & UI_ACTION_EXIT) {
             app_log_write(APP_LOG_INFO, "Exit requested");
             break;
         }
 
         u64 now = osGetTime();
-        if (keys_down & KEY_A) {
+        if (actions & UI_ACTION_PUBLISH_ONCE) {
             publish_chatter(&dds, &chatter_sequence);
         }
-        if (keys_down & KEY_B) {
+        if (actions & UI_ACTION_TOGGLE_PUBLISHING) {
             chatter_publishing = !chatter_publishing;
             next_chatter_at = now;
             app_log_write(APP_LOG_INFO, "ROS 1Hz chatter %s", chatter_publishing ? "enabled" : "disabled");
         }
-        if (keys_down & KEY_Y) {
+        if (actions & UI_ACTION_TOGGLE_LISTENER) {
             chatter_listening = !chatter_listening;
             app_log_write(APP_LOG_INFO, "ROS listener %s", chatter_listening ? "enabled" : "disabled");
         }
@@ -485,7 +447,7 @@ int main(void) {
             }
             last_reader_qos_rejections = reader_qos_rejections;
         }
-        if (state.socket_fd >= 0 && (keys_down & KEY_X)) {
+        if (state.socket_fd >= 0 && (actions & UI_ACTION_SEND_PROBE)) {
             send_probe(&state, &multicast_destination, true);
             if (peer_valid) {
                 send_probe(&state, &unicast_destination, false);
@@ -499,7 +461,6 @@ int main(void) {
         }
 
         if (now >= next_status_at) {
-            ddsrt_3ds_socket_stats_t socket_stats;
             dds_runtime_socket_stats(&socket_stats);
             if (socket_stats.last_send_errno != last_send_errno ||
                 socket_stats.last_recv_errno != last_recv_errno) {
@@ -523,15 +484,65 @@ int main(void) {
                               (unsigned long)socket_stats.rx_remote);
                 next_rtps_log_at = now + RTPS_LOG_INTERVAL_MS;
             }
-            draw_dynamic_status(&status_console, &config, &state, &dds, chatter_publishing,
-                                chatter_listening, graph_matches, writer_matches, reader_matches,
-                                writer_qos_rejections, reader_qos_rejections, &socket_stats);
             next_status_at = now + STATUS_REFRESH_MS;
         }
-        app_log_render();
-        gfxFlushBuffers();
-        gfxSwapBuffers();
-        gspWaitForVBlank();
+
+        ui_snapshot snapshot = {
+            .build_id = APP_BUILD_ID,
+            .local_ip = local_ip_text,
+            .netmask = netmask_ip_text,
+            .broadcast_ip = broadcast_ip_text,
+            .peer_ip = config.peer_ip[0] != '\0' ? config.peer_ip : "-",
+            .last_probe_sender = state.last_sender,
+            .last_probe_payload = state.last_payload,
+            .dds_status = dds_runtime_status(&dds),
+            .dds_error = dds_runtime_error_text(&dds),
+            .log_path = app_log_file_path(),
+            .domain_id = config.domain_id,
+            .send_interval_ms = config.send_interval_ms,
+            .probe_port = config.port,
+            .soc_result = soc_result,
+            .dds_result = dds.last_result,
+            .network_ready = network_ready,
+            .dds_running = dds.running,
+            .dds_enabled = config.dds_enabled,
+            .external_config = external_config_loaded,
+            .static_peer = config.peer_ip[0] != '\0',
+            .publishing = chatter_publishing,
+            .listening = chatter_listening,
+            .log_has_error = app_log_has_error(),
+            .probe_socket_ready = state.socket_fd >= 0,
+            .probe_membership_joined = state.membership_joined,
+            .probe_socket_error = state.socket_error,
+            .probe_reuse_error = state.reuse_error,
+            .probe_bind_error = state.bind_error,
+            .probe_nonblocking_error = state.nonblocking_error,
+            .probe_membership_error = state.membership_error,
+            .probe_loopback_error = state.loopback_error,
+            .probe_last_send_error = state.last_send_error,
+            .probe_last_receive_error = state.last_receive_error,
+            .probe_multicast_sent = state.multicast_sent,
+            .probe_unicast_sent = state.unicast_sent,
+            .probe_received = state.received,
+            .chatter_transmitted = dds_runtime_chatter_transmitted(&dds),
+            .chatter_received = dds_runtime_chatter_received(&dds),
+            .graph_published = dds_runtime_graph_published(&dds),
+            .graph_matches = graph_matches,
+            .writer_matches = writer_matches,
+            .reader_matches = reader_matches,
+            .writer_qos_rejections = writer_qos_rejections,
+            .reader_qos_rejections = reader_qos_rejections,
+            .writer_qos_policy = writer_qos_policy,
+            .reader_qos_policy = reader_qos_policy,
+            .rtps_tx_multicast = socket_stats.tx_multicast,
+            .rtps_tx_unicast = socket_stats.tx_unicast,
+            .rtps_rx_total = socket_stats.rx_total,
+            .rtps_rx_remote = socket_stats.rx_remote,
+            .rtps_last_send_errno = socket_stats.last_send_errno,
+            .rtps_last_recv_errno = socket_stats.last_recv_errno,
+            .rtps_multicast_if_errno = socket_stats.multicast_if_errno
+        };
+        app_ui_render(&snapshot);
     }
 
     dds_runtime_stop(&dds);
@@ -551,8 +562,8 @@ int main(void) {
     }
     free(soc_buffer);
     app_log_write(APP_LOG_INFO, "Application stopped");
-    app_log_render();
     app_log_close();
+    app_ui_exit();
     romfsExit();
     gfxExit();
     return 0;

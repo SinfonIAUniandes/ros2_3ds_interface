@@ -7,8 +7,8 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET := ros2_3ds_interface
 BUILD := build
-SOURCES := source source/logging generated/ros_graph generated/ros_types
-INCLUDES := include include/logging generated/ros_graph generated/ros_types
+SOURCES := source source/logging source/ui generated/ros_graph generated/ros_types
+INCLUDES := include include/logging include/ui generated/ros_graph generated/ros_types
 ROMFS := romfs
 CYCLONEDDS_SOURCE ?= $(abspath ../cyclonedds_3ds)
 CYCLONEDDS_BUILD ?= $(CYCLONEDDS_SOURCE)/build-3ds
@@ -23,7 +23,7 @@ CFLAGS := -g -Wall -Wextra -Werror -O2 -mword-relocations \
 	-ffunction-sections $(ARCH) $(INCLUDE) -D__3DS__
 ASFLAGS := -g $(ARCH)
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
-LIBS := -lddsc -lctru -lm
+LIBS := -lddsc -lcitro2d -lcitro3d -lctru -lm
 LIBDIRS := $(CTRULIB) $(CYCLONEDDS_BUILD)
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))

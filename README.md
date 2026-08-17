@@ -71,6 +71,7 @@ The 3DS log should display `ROS REMOTE RX`.
 | B | Toggle publishing at 1 Hz |
 | Y | Toggle the subscriber |
 | X | Send a diagnostic UDP probe |
+| L / R | Change UI view |
 | START | Exit |
 
 ## Network Setup
@@ -100,6 +101,7 @@ Start with the [documentation index](docs/README.md).
 - [Architecture overview](docs/architecture/overview.md)
 - [Network discovery](docs/architecture/network-discovery.md)
 - [ROS 2 integration](docs/architecture/ros-integration.md)
+- [UI system](docs/architecture/ui-system.md)
 - [Runtime configuration](docs/guides/configuration.md)
 - [Building from source](docs/guides/building.md)
 - [Diagnostics and troubleshooting](docs/guides/troubleshooting.md)

@@ -1,5 +1,7 @@
 #include "app_log.h"
 
+#include <3ds.h>
+
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -8,25 +10,15 @@
 #include <time.h>
 #include <unistd.h>
 
-#define APP_LOG_CAPACITY 16
-#define APP_LOG_MESSAGE_SIZE 192
-#define APP_LOG_VISIBLE_LINES 14
+#define APP_LOG_CAPACITY 32
 #define APP_LOG_ROOT_DIRECTORY "sdmc:/3ds/ros2_3ds_interface/logs"
 #define NINTENDO_EPOCH_OFFSET_SECONDS INT64_C(2208988800)
 
-typedef struct {
-    u64 timestamp_ms;
-    app_log_level level;
-    char message[APP_LOG_MESSAGE_SIZE];
-} app_log_entry;
-
 static struct {
-    PrintConsole *console;
     LightLock lock;
-    app_log_entry entries[APP_LOG_CAPACITY];
+    app_log_record entries[APP_LOG_CAPACITY];
     u32 first;
     u32 count;
-    bool dirty;
     bool has_error;
     FILE *file;
     char session_path[160];
@@ -35,7 +27,7 @@ static struct {
     u32 error_count;
 } g_log;
 
-static const char *level_name(app_log_level level) {
+const char *app_log_level_name(app_log_level level) {
     switch (level) {
         case APP_LOG_DEBUG: return "DBG";
         case APP_LOG_INFO: return "INF";
@@ -92,7 +84,7 @@ static void remove_previous_day(time_t now) {
     remove_directory_contents(previous_day);
 }
 
-static void write_snapshot(const app_log_entry *error) {
+static void write_snapshot(const app_log_record *error) {
     char snapshot_path[192];
     snprintf(snapshot_path, sizeof(snapshot_path), "%s/error-%010llu-%03lu.log",
              g_log.error_directory, (unsigned long long)error->timestamp_ms,
@@ -106,16 +98,15 @@ static void write_snapshot(const app_log_entry *error) {
     fprintf(snapshot, "ROS 2 3DS error snapshot\n");
     fprintf(snapshot, "error: %s\n\nrecent events:\n", error->message);
     for (u32 offset = 0; offset < g_log.count; offset++) {
-        const app_log_entry *entry = &g_log.entries[(g_log.first + offset) % APP_LOG_CAPACITY];
+        const app_log_record *entry = &g_log.entries[(g_log.first + offset) % APP_LOG_CAPACITY];
         fprintf(snapshot, "[%010llu] %s %s\n", (unsigned long long)entry->timestamp_ms,
-                level_name(entry->level), entry->message);
+            app_log_level_name(entry->level), entry->message);
     }
     fclose(snapshot);
 }
 
-void app_log_init(PrintConsole *console) {
+void app_log_init(void) {
     memset(&g_log, 0, sizeof(g_log));
-    g_log.console = console;
     LightLock_Init(&g_log.lock);
     create_log_directory();
     time_t now = unix_time_now();
@@ -163,18 +154,17 @@ void app_log_write(app_log_level level, const char *format, ...) {
         g_log.count++;
     }
 
-    app_log_entry *entry = &g_log.entries[index];
+    app_log_record *entry = &g_log.entries[index];
     entry->timestamp_ms = osGetTime();
     entry->level = level;
     snprintf(entry->message, sizeof(entry->message), "%s", message);
-    g_log.dirty = true;
     if (level == APP_LOG_ERROR) {
         g_log.has_error = true;
     }
 
     if (g_log.file != NULL) {
         fprintf(g_log.file, "[%010llu] %s %s\n", (unsigned long long)entry->timestamp_ms,
-                level_name(level), entry->message);
+            app_log_level_name(level), entry->message);
         if (level == APP_LOG_ERROR) {
             fflush(g_log.file);
         }
@@ -185,24 +175,19 @@ void app_log_write(app_log_level level, const char *format, ...) {
     LightLock_Unlock(&g_log.lock);
 }
 
-void app_log_render(void) {
+size_t app_log_copy_recent(app_log_record *records, size_t capacity) {
+    if (records == NULL || capacity == 0) {
+        return 0;
+    }
     LightLock_Lock(&g_log.lock);
-    if (!g_log.dirty || g_log.console == NULL) {
-        LightLock_Unlock(&g_log.lock);
-        return;
+    size_t available = (size_t)g_log.count;
+    size_t count = available < capacity ? available : capacity;
+    u32 start = (g_log.first + g_log.count - count) % APP_LOG_CAPACITY;
+    for (size_t offset = 0; offset < count; offset++) {
+        records[offset] = g_log.entries[(start + offset) % APP_LOG_CAPACITY];
     }
-
-    consoleSelect(g_log.console);
-    consoleClear();
-    u32 visible = g_log.count < APP_LOG_VISIBLE_LINES ? g_log.count : APP_LOG_VISIBLE_LINES;
-    u32 start = (g_log.first + g_log.count - visible) % APP_LOG_CAPACITY;
-    for (u32 offset = 0; offset < visible; offset++) {
-        const app_log_entry *entry = &g_log.entries[(start + offset) % APP_LOG_CAPACITY];
-        printf("%8llu %-3s %.26s\n", (unsigned long long)(entry->timestamp_ms / 1000),
-               level_name(entry->level), entry->message);
-    }
-    g_log.dirty = false;
     LightLock_Unlock(&g_log.lock);
+    return count;
 }
 
 bool app_log_has_error(void) {
