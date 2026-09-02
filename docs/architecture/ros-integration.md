@@ -41,7 +41,7 @@ ROS 2 command-line tools build their graph from the
 `ros_discovery_info` topic. The application publishes a
 `ParticipantEntitiesInfo` sample containing:
 
-- node name `/ros2_3ds_interface`
+- node name `/nintendo_3ds/ros2_3ds_interface` by default
 - participant GID
 - `/chatter` writer GID
 - `/chatter` reader GID

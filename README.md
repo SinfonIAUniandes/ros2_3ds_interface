@@ -40,7 +40,7 @@ export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 unset CYCLONEDDS_URI
 ros2 daemon stop
-ros2 topic echo /chatter std_msgs/msg/String
+ros2 topic echo /nintendo_3ds/chatter std_msgs/msg/String
 ```
 
 PowerShell, best effort:
@@ -52,7 +52,7 @@ Remove-Item Env:CYCLONEDDS_URI -ErrorAction SilentlyContinue
 ros2 pkg prefix rmw_cyclonedds_cpp
 ros2 daemon stop
 ros2 doctor --report | Select-String -Pattern "middleware|rmw"
-ros2 topic echo /chatter std_msgs/msg/String
+ros2 topic echo /nintendo_3ds/chatter std_msgs/msg/String
 ```
 
 Run every ROS command from that same PowerShell session. If
@@ -65,7 +65,7 @@ message.
 To send data to the 3DS:
 
 ```sh
-ros2 topic pub --rate 1 /chatter std_msgs/msg/String '{data: Hello from ROS 2}'
+ros2 topic pub --rate 1 /nintendo_3ds/chatter std_msgs/msg/String '{data: Hello from ROS 2}'
 ```
 
 The 3DS log should display `ROS REMOTE RX`.
@@ -73,8 +73,8 @@ The 3DS log should display `ROS REMOTE RX`.
 To inspect the motion sensors:
 
 ```sh
-ros2 topic echo /imu/data_raw sensor_msgs/msg/Imu
-ros2 topic hz /imu/data_raw
+ros2 topic echo /nintendo_3ds/imu/data_raw sensor_msgs/msg/Imu
+ros2 topic hz /nintendo_3ds/imu/data_raw
 ```
 
 The optional JPEG camera stream publishes on `/camera/image_raw/compressed`.
@@ -85,7 +85,7 @@ To call the built-in service:
 
 ```sh
 ros2 service list -t
-ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
+ros2 service call /nintendo_3ds/add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
 ```
 
 ## Controls
@@ -118,6 +118,13 @@ If automatic discovery is blocked by the network, configure a static peer on
 the SD card without rebuilding the app. See the
 [configuration guide](docs/guides/configuration.md).
 
+The same SD-card configuration selects the DDS domain with `domain_id` and the
+ROS graph namespace with `ros_namespace`. The built-in defaults are domain `0`
+and namespace `/nintendo_3ds`. The namespace prefixes every ROS endpoint, so
+the default topics include `/nintendo_3ds/chatter`,
+`/nintendo_3ds/imu/data_raw`, and
+`/nintendo_3ds/camera/image_raw/compressed`.
+
 WSL2 in its default NAT mode is not expected to participate directly in LAN
 DDS discovery. Use native Windows ROS 2, mirrored networking, or a native Linux
 host instead.
@@ -146,10 +153,10 @@ Start with the [documentation index](docs/README.md).
 
 ## Current Scope
 
-- `/chatter` publisher and subscriber using `std_msgs/msg/String`
-- `/imu/data_raw` publisher using `sensor_msgs/msg/Imu`
-- `/camera/image_raw/compressed` JPEG publisher using `sensor_msgs/msg/CompressedImage`
-- `/add_two_ints` server using `example_interfaces/srv/AddTwoInts`
+- Namespaced chatter publisher and subscriber using `std_msgs/msg/String`
+- Namespaced IMU publisher using `sensor_msgs/msg/Imu`
+- Namespaced JPEG camera publisher using `sensor_msgs/msg/CompressedImage`
+- Namespaced AddTwoInts server using `example_interfaces/srv/AddTwoInts`
 - ROS 2 graph publication for the 3DS node and endpoints
 - IPv4 UDP transport on the local network
 - Multicast, subnet-broadcast, and optional static-peer discovery

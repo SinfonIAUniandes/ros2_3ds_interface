@@ -122,7 +122,7 @@ the ROS service body and matches these service types by name.
 
 The service request reader and reply writer are included in
 `ros_discovery_info`, so the service should be visible to `ros2 service list`
-and `ros2 node info /ros2_3ds_interface`.
+and `ros2 node info /nintendo_3ds/ros2_3ds_interface` with the default namespace.
 
 ## Limits
 

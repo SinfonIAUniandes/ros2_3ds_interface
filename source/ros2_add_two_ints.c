@@ -1,6 +1,7 @@
 #include "ros2_add_two_ints.h"
 
 #include "ros2_common.h"
+#include "ros2_names.h"
 #include "ros2_types.h"
 
 #include <limits.h>
@@ -42,13 +43,26 @@ void ros2_add_two_ints_init(ros2_add_two_ints *service) {
     service->last_result = DDS_RETCODE_OK;
 }
 
-bool ros2_add_two_ints_start(ros2_add_two_ints *service, dds_entity_t participant) {
+bool ros2_add_two_ints_start(ros2_add_two_ints *service, dds_entity_t participant,
+                             const char *ros_namespace) {
     if (!make_service_id(service, participant)) return false;
 
+    char service_name[256];
+    char request_name[256];
+    char response_name[256];
+    if (!ros2_dds_name(service_name, sizeof(service_name), "", ros_namespace, "add_two_ints") ||
+        !ros2_dds_name(request_name, sizeof(request_name), "rq", ros_namespace,
+                       "add_two_intsRequest") ||
+        !ros2_dds_name(response_name, sizeof(response_name), "rr", ros_namespace,
+                       "add_two_intsReply")) {
+        service->last_result = DDS_RETCODE_BAD_PARAMETER;
+        return false;
+    }
+
     ros2_service_interface iface = {
-        .name = ROS2_ADD_TWO_INTS_SERVICE,
-        .request_name = ROS2_ADD_TWO_INTS_REQUEST_TOPIC,
-        .response_name = ROS2_ADD_TWO_INTS_RESPONSE_TOPIC,
+        .name = service_name,
+        .request_name = request_name,
+        .response_name = response_name,
         .request_type = &example_interfaces_srv_dds__AddTwoInts_Request__desc,
         .response_type = &example_interfaces_srv_dds__AddTwoInts_Response__desc,
         .request_topic = service->request_topic,

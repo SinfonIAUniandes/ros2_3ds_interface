@@ -15,6 +15,7 @@ typedef struct {
     ui_controls controls;
     uint8_t selected_topic;
     uint8_t selected_menu_item;
+    uint8_t selected_settings_item;
     uint8_t camera_setting_index;
     ros2_camera_config camera_config;
 } ui_context;

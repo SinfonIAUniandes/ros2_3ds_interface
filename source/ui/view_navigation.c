@@ -1,5 +1,10 @@
 #include "ui_internal.h"
 
+static const char *service_namespace(const ui_snapshot *snapshot) {
+    return snapshot->ros_namespace != NULL && strcmp(snapshot->ros_namespace, "/") != 0
+        ? snapshot->ros_namespace : "";
+}
+
 static void menu_row(ui_context *ui, float y, const char *title, const char *detail, bool selected) {
     ui_rect(8, y, 304, 43, selected ? ui->theme.selected : ui->theme.surface);
     ui_rect(8, y, 5, 43, selected ? ui->theme.accent : ui->theme.border);
@@ -11,7 +16,8 @@ void ui_view_services_top(ui_context *ui, const ui_snapshot *snapshot) {
     ui_header(ui, "Services", "Server registry");
     ui_panel(ui, 8, 58, 384, 164);
     ui_rect(8, 58, 5, 164, snapshot->add_two_ints_running ? ui->theme.success : ui->theme.danger);
-    ui_text(ui, 22, 76, 0.50f, ui->theme.text, "/add_two_ints");
+    ui_textf(ui, 22, 76, 0.50f, ui->theme.text, "%s/add_two_ints",
+             service_namespace(snapshot));
     ui_text(ui, 22, 101, 0.35f, ui->theme.muted, "example_interfaces/srv/AddTwoInts");
     ui_badge(ui, 310, 74, snapshot->add_two_ints_running ? "READY" : "OFF", snapshot->add_two_ints_running);
     ui_textf(ui, 22, 134, 0.40f, ui->theme.text, "Requests handled  %llu",
@@ -26,12 +32,12 @@ void ui_view_services_top(ui_context *ui, const ui_snapshot *snapshot) {
 }
 
 void ui_view_services_bottom(ui_context *ui, const ui_snapshot *snapshot) {
-    (void)snapshot;
     const ui_controls *controls = app_ui_controls();
     ui_text(ui, 8, 45, 0.47f, ui->theme.text, "Add two integers server");
     ui_panel(ui, 8, 70, 304, 112);
     ui_text(ui, 18, 83, 0.34f, ui->theme.muted, "Call from ROS 2");
-    ui_text(ui, 18, 106, 0.33f, ui->theme.text, "ros2 service call /add_two_ints");
+    ui_textf(ui, 18, 106, 0.33f, ui->theme.text, "ros2 service call %s/add_two_ints",
+             service_namespace(snapshot));
     ui_text(ui, 18, 126, 0.33f, ui->theme.text, "example_interfaces/srv/AddTwoInts");
     ui_text(ui, 18, 146, 0.33f, ui->theme.text, "\"{a: 2, b: 3}\"");
     ui_textf(ui, 18, 166, 0.31f, ui->theme.muted, "Taken %llu  |  Replies %llu",
@@ -66,25 +72,24 @@ void ui_view_menu_bottom(ui_context *ui, const ui_snapshot *snapshot) {
 }
 
 void ui_view_settings_top(ui_context *ui, const ui_snapshot *snapshot) {
-    (void)snapshot;
     const ui_controls *controls = app_ui_controls();
-    ui_header(ui, "Settings", "Camera config with SD persistence");
+    ui_header(ui, "Settings", "Runtime DDS configuration");
     ui_panel(ui, 8, 58, 188, 164);
-    ui_text(ui, 18, 69, 0.37f, ui->theme.muted, "CAMERA");
-    ui_textf(ui, 18, 94, 0.40f, ui->theme.text, "Source: %s", snapshot->camera_source == 0 ? "inner" :
-             snapshot->camera_source == 1 ? "outer_left" : "outer_right");
-    ui_textf(ui, 18, 118, 0.40f, ui->theme.text, "Resolution: %s",
-             snapshot->camera_resolution == 0 ? "QQVGA" : "QVGA");
-    ui_textf(ui, 18, 142, 0.40f, ui->theme.text, "FPS: %u", (unsigned int)snapshot->camera_fps);
-    ui_textf(ui, 18, 166, 0.40f, ui->theme.text, "Quality: %u", (unsigned int)snapshot->camera_quality);
+    ui_text(ui, 18, 69, 0.37f, ui->theme.muted, "ROS IDENTITY");
+    ui_rect(16, 84, 172, 42, ui->selected_settings_item == 0 ? ui->theme.selected : ui->theme.surface);
+    ui_text(ui, 24, 91, 0.32f, ui->theme.muted, "NAMESPACE");
+    ui_textf(ui, 24, 108, 0.42f, ui->theme.text, "%s", snapshot->ros_namespace);
+    ui_rect(16, 134, 172, 42, ui->selected_settings_item == 1 ? ui->theme.selected : ui->theme.surface);
+    ui_text(ui, 24, 141, 0.32f, ui->theme.muted, "DOMAIN ID");
+    ui_textf(ui, 24, 158, 0.42f, ui->theme.text, "%lu", (unsigned long)snapshot->domain_id);
 
     ui_panel(ui, 204, 58, 188, 164);
     ui_text(ui, 214, 69, 0.37f, ui->theme.muted, "NAVIGATION");
     ui_textf(ui, 214, 94, 0.40f, ui->theme.text, "%s / %s  Tabs",
              app_ui_control_label(controls->previous_view), app_ui_control_label(controls->next_view));
-    ui_textf(ui, 214, 124, 0.40f, ui->theme.text, "%s / %s  Camera",
+    ui_textf(ui, 214, 124, 0.40f, ui->theme.text, "%s / %s  Select",
              app_ui_control_label(controls->previous_item), app_ui_control_label(controls->next_item));
-    ui_textf(ui, 214, 154, 0.40f, ui->theme.text, "%s  Activate", app_ui_control_label(controls->activate));
+    ui_textf(ui, 214, 154, 0.40f, ui->theme.text, "%s  Edit", app_ui_control_label(controls->activate));
     ui_textf(ui, 214, 184, 0.40f, ui->theme.text, "%s  Back", app_ui_control_label(controls->back));
 }
 

@@ -10,6 +10,13 @@ void ros2_graph_init(ros2_graph *graph) {
     graph->writer = DDS_ENTITY_NIL;
     graph->last_result = DDS_RETCODE_OK;
     graph->published = 0;
+    snprintf(graph->node_namespace, sizeof(graph->node_namespace), "/");
+}
+
+void ros2_graph_set_namespace(ros2_graph *graph, const char *node_namespace) {
+    if (graph == NULL) return;
+    snprintf(graph->node_namespace, sizeof(graph->node_namespace), "%s",
+             node_namespace != NULL && node_namespace[0] != '\0' ? node_namespace : "/");
 }
 
 bool ros2_graph_start(ros2_graph *graph, dds_entity_t participant) {
@@ -114,7 +121,7 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
         memcpy(reader_gids[reader_count++].data, service_request_reader_guid.v,
                sizeof(reader_gids[0].data));
     }
-    snprintf(node.node_namespace, sizeof(node.node_namespace), "%s", ROS2_GRAPH_NODE_NAMESPACE);
+    snprintf(node.node_namespace, sizeof(node.node_namespace), "%s", graph->node_namespace);
     snprintf(node.node_name, sizeof(node.node_name), "%s", ROS2_GRAPH_NODE_NAME);
     node.reader_gid_seq._maximum = reader_count;
     node.reader_gid_seq._length = reader_count;

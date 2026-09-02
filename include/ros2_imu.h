@@ -27,7 +27,8 @@ typedef struct {
 } ros2_imu;
 
 void ros2_imu_init(ros2_imu *imu);
-bool ros2_imu_start(ros2_imu *imu, dds_entity_t participant, double acceleration_scale);
+bool ros2_imu_start(ros2_imu *imu, dds_entity_t participant, double acceleration_scale,
+                    const char *ros_namespace);
 bool ros2_imu_publish(ros2_imu *imu, uint64_t timestamp_ms);
 int32_t ros2_imu_writer_matches(ros2_imu *imu);
 dds_entity_t ros2_imu_writer_entity(const ros2_imu *imu);

@@ -1,6 +1,7 @@
 #include <3ds.h>
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <malloc.h>
@@ -31,6 +32,7 @@
 
 typedef struct {
     char peer_ip[INET_ADDRSTRLEN];
+    char ros_namespace[128];
     u16 port;
     u32 send_interval_ms;
     u32 domain_id;
@@ -73,11 +75,75 @@ static char *trim(char *text) {
     return text;
 }
 
+static bool set_ros_namespace(probe_config *config, const char *value) {
+    const char *input = value;
+    if (strcmp(input, "3ds") == 0 || strcmp(input, "/3ds") == 0) {
+        input = "nintendo_3ds";
+    }
+    while (*input == '/') input++;
+
+    char normalized[sizeof(config->ros_namespace)];
+    size_t output_length = 0;
+    normalized[output_length++] = '/';
+    bool token_start = true;
+    for (; *input != '\0'; input++) {
+        const unsigned char character = (unsigned char)*input;
+        if (character == '/') {
+            if (token_start || output_length + 1 >= sizeof(normalized)) return false;
+            normalized[output_length++] = '/';
+            token_start = true;
+        } else {
+            if ((!isalnum(character) && character != '_') ||
+                (token_start && isdigit(character)) || output_length + 1 >= sizeof(normalized)) {
+                return false;
+            }
+            normalized[output_length++] = (char)character;
+            token_start = false;
+        }
+    }
+    if (token_start && output_length > 1) return false;
+    normalized[output_length] = '\0';
+    memcpy(config->ros_namespace, normalized, output_length + 1);
+    return true;
+}
+
+static bool edit_ros_namespace(probe_config *config) {
+    char value[sizeof(config->ros_namespace)];
+    snprintf(value, sizeof(value), "%s", config->ros_namespace);
+    SwkbdState keyboard;
+    swkbdInit(&keyboard, SWKBD_TYPE_NORMAL, 1, sizeof(value) - 1);
+    swkbdSetInitialText(&keyboard, value);
+    swkbdSetHintText(&keyboard, "ROS namespace, for example: 3ds");
+    swkbdSetButton(&keyboard, SWKBD_BUTTON_LEFT, "Cancel", false);
+    swkbdSetButton(&keyboard, SWKBD_BUTTON_RIGHT, "Apply", true);
+    if (swkbdInputText(&keyboard, value, sizeof(value)) != SWKBD_BUTTON_RIGHT || value[0] == '\0') {
+        return false;
+    }
+    return set_ros_namespace(config, value);
+}
+
+static bool edit_domain_id(probe_config *config) {
+    char value[12];
+    snprintf(value, sizeof(value), "%lu", (unsigned long)config->domain_id);
+    SwkbdState keyboard;
+    swkbdInit(&keyboard, SWKBD_TYPE_NUMPAD, 1, 3);
+    swkbdSetInitialText(&keyboard, value);
+    swkbdSetHintText(&keyboard, "ROS domain ID (0-232)");
+    swkbdSetButton(&keyboard, SWKBD_BUTTON_LEFT, "Cancel", false);
+    swkbdSetButton(&keyboard, SWKBD_BUTTON_RIGHT, "Apply", true);
+    if (swkbdInputText(&keyboard, value, sizeof(value)) != SWKBD_BUTTON_RIGHT) return false;
+    long domain_id = strtol(value, NULL, 10);
+    if (domain_id < 0 || domain_id > 232) return false;
+    config->domain_id = (u32)domain_id;
+    return true;
+}
+
 static void load_config_defaults(probe_config *config) {
     memset(config, 0, sizeof(*config));
     config->port = DEFAULT_PORT;
     config->send_interval_ms = DEFAULT_SEND_INTERVAL_MS;
     config->domain_id = 0;
+    snprintf(config->ros_namespace, sizeof(config->ros_namespace), "/nintendo_3ds");
     config->dds_enabled = true;
     config->imu_enabled = true;
     config->camera_enabled = false;
@@ -134,6 +200,8 @@ static bool load_config_file(probe_config *config, const char *path) {
             if (domain_id >= 0 && domain_id <= 232) {
                 config->domain_id = (u32)domain_id;
             }
+        } else if (strcmp(key, "ros_namespace") == 0) {
+            (void)set_ros_namespace(config, value);
         } else if (strcmp(key, "dds_enabled") == 0) {
             config->dds_enabled = strtol(value, NULL, 10) != 0;
         } else if (strcmp(key, "imu_enabled") == 0) {
@@ -387,7 +455,7 @@ int main(void) {
         bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                          broadcast_ip_text, config.imu_enabled,
                                          config.imu_acceleration_scale, config.camera_enabled,
-                                         &config.camera);
+                                         &config.camera, config.ros_namespace);
         app_log_write(started ? APP_LOG_INFO : APP_LOG_ERROR, "DDS participant %s rc=%ld %s",
                       started ? "started" : "failed", (long)dds.last_result,
                       dds_runtime_error_text(&dds));
@@ -457,6 +525,35 @@ int main(void) {
         }
 
         u64 now = osGetTime();
+        if (actions & (UI_ACTION_EDIT_NAMESPACE | UI_ACTION_EDIT_DOMAIN_ID)) {
+            const bool changed = (actions & UI_ACTION_EDIT_NAMESPACE)
+                ? edit_ros_namespace(&config) : edit_domain_id(&config);
+            if (changed) {
+                app_log_write(APP_LOG_INFO, "DDS reconfiguring namespace=%s domain=%lu",
+                              config.ros_namespace, (unsigned long)config.domain_id);
+                dds_runtime_stop(&dds);
+                dds_runtime_init(&dds);
+                dds_runtime_set_log_sink(dds_log_callback, NULL);
+                const bool restarted = network_ready && config.dds_enabled &&
+                    dds_runtime_start(&dds, config.domain_id, config.peer_ip,
+                                      broadcast_ip_text, config.imu_enabled,
+                                      config.imu_acceleration_scale, config.camera_enabled,
+                                      &config.camera, config.ros_namespace);
+                chatter_publishing = false;
+                chatter_topic_enabled = true;
+                imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
+                                    dds.imu.writer > DDS_ENTITY_NIL;
+                camera_topic_enabled = config.camera_enabled && dds.camera.writer > DDS_ENTITY_NIL;
+                camera_publish_once_pending = false;
+                next_chatter_at = now;
+                next_imu_at = now;
+                next_camera_publish_at = now;
+                next_graph_at = now + GRAPH_REFRESH_MS;
+                app_log_write(restarted ? APP_LOG_INFO : APP_LOG_ERROR,
+                              "DDS reconfiguration %s rc=%ld", restarted ? "complete" : "failed",
+                              (long)dds.last_result);
+            }
+        }
         if (actions & UI_ACTION_TOGGLE_CHATTER_TOPIC) {
             chatter_topic_enabled = !chatter_topic_enabled;
             app_log_write(APP_LOG_INFO, "Chatter publisher %s",
@@ -681,6 +778,7 @@ int main(void) {
             .netmask = netmask_ip_text,
             .broadcast_ip = broadcast_ip_text,
             .peer_ip = config.peer_ip[0] != '\0' ? config.peer_ip : "-",
+            .ros_namespace = config.ros_namespace,
             .last_probe_sender = state.last_sender,
             .last_probe_payload = state.last_payload,
             .last_published_message = last_published_message,

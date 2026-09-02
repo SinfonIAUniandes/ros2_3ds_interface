@@ -1,7 +1,10 @@
 #include "ros2_chatter.h"
 
 #include "ros2_common.h"
+#include "ros2_names.h"
 #include "ros2_types.h"
+
+#include <stdio.h>
 
 void ros2_chatter_init(ros2_chatter *chatter) {
     chatter->topic = DDS_ENTITY_NIL;
@@ -12,9 +15,15 @@ void ros2_chatter_init(ros2_chatter *chatter) {
     chatter->received = 0;
 }
 
-bool ros2_chatter_start(ros2_chatter *chatter, dds_entity_t participant) {
+bool ros2_chatter_start(ros2_chatter *chatter, dds_entity_t participant,
+                        const char *ros_namespace) {
+    char topic_name[256];
+    if (!ros2_dds_name(topic_name, sizeof(topic_name), "rt", ros_namespace, "chatter")) {
+        chatter->last_result = DDS_RETCODE_BAD_PARAMETER;
+        return false;
+    }
     ros2_topic_interface topic = {
-        .name = "rt/chatter",
+        .name = topic_name,
         .type = &std_msgs_msg_dds__String__desc,
         .topic = chatter->topic,
         .writer = chatter->writer,

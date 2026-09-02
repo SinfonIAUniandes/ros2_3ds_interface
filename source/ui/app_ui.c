@@ -111,13 +111,13 @@ ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch) {
                                                  : UI_ACTION_TOGGLE_CAMERA_TOPIC;
         }
     } else if (g_ui.view == UI_VIEW_SETTINGS) {
-        if (actions & UI_ACTION_NEXT_ITEM) {
-            app_ui_cycle_camera_setting(1);
-            actions |= UI_ACTION_CAMERA_SETTING_NEXT;
-        }
-        if (actions & UI_ACTION_PREVIOUS_ITEM) {
-            app_ui_cycle_camera_setting(-1);
-            actions |= UI_ACTION_CAMERA_SETTING_PREVIOUS;
+        if (actions & UI_ACTION_NEXT_ITEM) g_ui.selected_settings_item =
+            (g_ui.selected_settings_item + 1u) % 2u;
+        if (actions & UI_ACTION_PREVIOUS_ITEM) g_ui.selected_settings_item =
+            g_ui.selected_settings_item == 0u ? 1u : 0u;
+        if (actions & UI_ACTION_ACTIVATE) {
+            actions |= g_ui.selected_settings_item == 0u
+                ? UI_ACTION_EDIT_NAMESPACE : UI_ACTION_EDIT_DOMAIN_ID;
         }
     } else if (g_ui.view == UI_VIEW_MENU) {
         if (actions & UI_ACTION_NEXT_ITEM) g_ui.selected_menu_item = (g_ui.selected_menu_item + 1) % 3;
@@ -245,4 +245,5 @@ bool app_ui_apply_camera_setting(int direction, ros2_camera_config *config) {
 void app_ui_init_camera_settings(void) {
     ros2_camera_config_defaults(&g_ui.camera_config);
     g_ui.camera_setting_index = 0u;
+    g_ui.selected_settings_item = 0u;
 }

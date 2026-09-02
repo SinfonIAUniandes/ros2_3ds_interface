@@ -18,7 +18,8 @@ typedef struct {
 } ros2_chatter;
 
 void ros2_chatter_init(ros2_chatter *chatter);
-bool ros2_chatter_start(ros2_chatter *chatter, dds_entity_t participant);
+bool ros2_chatter_start(ros2_chatter *chatter, dds_entity_t participant,
+                        const char *ros_namespace);
 bool ros2_chatter_publish(ros2_chatter *chatter, const char *data);
 dds_return_t ros2_chatter_take(ros2_chatter *chatter, ros2_chatter_receive_fn callback, void *context);
 dds_entity_t ros2_chatter_writer_entity(const ros2_chatter *chatter);

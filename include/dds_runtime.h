@@ -21,6 +21,7 @@ typedef struct {
     int32_t participant;
     int32_t last_result;
     bool running;
+    char ros_namespace[128];
     ros2_topic_interface common_topic;
     ros2_service_interface common_service;
     ros2_chatter chatter;
@@ -35,7 +36,8 @@ void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context);
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
                        const char *broadcast_ip, bool imu_enabled,
                        double imu_acceleration_scale, bool camera_enabled,
-                       const ros2_camera_config *camera_config);
+                       const ros2_camera_config *camera_config,
+                       const char *ros_namespace);
 void dds_runtime_stop(dds_runtime *runtime);
 bool dds_runtime_publish_chatter(dds_runtime *runtime, const char *data);
 bool dds_runtime_refresh_graph(dds_runtime *runtime);

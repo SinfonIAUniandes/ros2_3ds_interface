@@ -36,7 +36,9 @@ typedef enum {
     UI_ACTION_TOGGLE_IMU_TOPIC = 1u << 12,
     UI_ACTION_TOGGLE_CAMERA_TOPIC = 1u << 13,
     UI_ACTION_CAMERA_SETTING_NEXT = 1u << 14,
-    UI_ACTION_CAMERA_SETTING_PREVIOUS = 1u << 15
+    UI_ACTION_CAMERA_SETTING_PREVIOUS = 1u << 15,
+    UI_ACTION_EDIT_NAMESPACE = 1u << 16,
+    UI_ACTION_EDIT_DOMAIN_ID = 1u << 17
 } ui_action;
 
 typedef struct {
@@ -59,6 +61,7 @@ typedef struct {
     const char *netmask;
     const char *broadcast_ip;
     const char *peer_ip;
+    const char *ros_namespace;
     const char *last_probe_sender;
     const char *last_probe_payload;
     const char *last_published_message;

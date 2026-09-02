@@ -39,6 +39,7 @@ void dds_runtime_init(dds_runtime *runtime) {
     runtime->participant = DDS_ENTITY_NIL;
     runtime->last_result = DDS_RETCODE_OK;
     runtime->running = false;
+    snprintf(runtime->ros_namespace, sizeof(runtime->ros_namespace), "/");
     ros2_chatter_init(&runtime->chatter);
     ros2_graph_init(&runtime->graph);
     ros2_imu_init(&runtime->imu);
@@ -79,7 +80,8 @@ void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context) {
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
                        const char *broadcast_ip, bool imu_enabled,
                        double imu_acceleration_scale, bool camera_enabled,
-                       const ros2_camera_config *camera_config) {
+                       const ros2_camera_config *camera_config,
+                       const char *ros_namespace) {
     if (runtime->running) {
         return true;
     }
@@ -151,18 +153,21 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
     }
 
     runtime->participant = participant;
-    if (!ros2_chatter_start(&runtime->chatter, participant)) {
+    snprintf(runtime->ros_namespace, sizeof(runtime->ros_namespace), "%s",
+             ros_namespace != NULL && ros_namespace[0] != '\0' ? ros_namespace : "/");
+    ros2_graph_set_namespace(&runtime->graph, ros_namespace);
+    if (!ros2_chatter_start(&runtime->chatter, participant, ros_namespace)) {
         runtime->last_result = runtime->chatter.last_result;
         goto fail;
     }
 
     if (imu_enabled) {
-        (void)ros2_imu_start(&runtime->imu, participant, imu_acceleration_scale);
+        (void)ros2_imu_start(&runtime->imu, participant, imu_acceleration_scale, ros_namespace);
     }
     if (camera_enabled) {
-        (void)ros2_camera_start(&runtime->camera, participant, camera_config);
+        (void)ros2_camera_start(&runtime->camera, participant, camera_config, ros_namespace);
     }
-    (void)ros2_add_two_ints_start(&runtime->add_two_ints, participant);
+    (void)ros2_add_two_ints_start(&runtime->add_two_ints, participant, ros_namespace);
 
     if (!ros2_graph_start(&runtime->graph, participant)) {
         runtime->last_result = runtime->graph.last_result;
@@ -295,7 +300,8 @@ bool dds_runtime_set_camera_enabled(dds_runtime *runtime, bool enabled,
         app_log_write(APP_LOG_INFO, "CAM starting: enabling camera");
         if (runtime->camera.writer > DDS_ENTITY_NIL) return true;
         app_log_write(APP_LOG_INFO, "CAM calling ros2_camera_start");
-        if (!ros2_camera_start(&runtime->camera, runtime->participant, camera_config)) {
+        if (!ros2_camera_start(&runtime->camera, runtime->participant, camera_config,
+                       runtime->ros_namespace)) {
             runtime->last_result = runtime->camera.last_result;
             return false;
         }

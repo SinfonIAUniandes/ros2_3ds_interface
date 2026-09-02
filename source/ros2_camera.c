@@ -1,6 +1,7 @@
 #include "ros2_camera.h"
 
 #include "ros2_common.h"
+#include "ros2_names.h"
 #include "ros2_types.h"
 #include "logging/app_log.h"
 
@@ -85,7 +86,7 @@ void ros2_camera_config_defaults(ros2_camera_config *config) {
 }
 
 bool ros2_camera_start(ros2_camera *camera, dds_entity_t participant,
-                       const ros2_camera_config *config) {
+                       const ros2_camera_config *config, const char *ros_namespace) {
     if (camera->writer > DDS_ENTITY_NIL || camera->info_writer > DDS_ENTITY_NIL ||
         camera->topic > DDS_ENTITY_NIL || camera->info_topic > DDS_ENTITY_NIL) {
         ros2_camera_stop(camera);
@@ -102,8 +103,18 @@ bool ros2_camera_start(ros2_camera *camera, dds_entity_t participant,
     camera_dimensions(camera);
     app_log_write(APP_LOG_INFO, "CAM creating topic...");
 
+    char compressed_name[256];
+    char info_name[256];
+    if (!ros2_dds_name(compressed_name, sizeof(compressed_name), "rt", ros_namespace,
+                       "camera/image_raw/compressed") ||
+        !ros2_dds_name(info_name, sizeof(info_name), "rt", ros_namespace,
+                       "camera/camera_info")) {
+        camera->last_result = DDS_RETCODE_BAD_PARAMETER;
+        return false;
+    }
+
     ros2_topic_interface compressed = {
-        .name = ROS2_CAMERA_TOPIC,
+        .name = compressed_name,
         .type = &sensor_msgs_msg_dds__CompressedImage__desc,
         .topic = camera->topic,
         .writer = camera->writer,
@@ -113,7 +124,7 @@ bool ros2_camera_start(ros2_camera *camera, dds_entity_t participant,
         .reader_enabled = false
     };
     ros2_topic_interface info = {
-        .name = ROS2_CAMERA_INFO_TOPIC,
+        .name = info_name,
         .type = &sensor_msgs_msg_dds__CameraInfo__desc,
         .topic = camera->info_topic,
         .writer = camera->info_writer,

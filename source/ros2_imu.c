@@ -1,6 +1,7 @@
 #include "ros2_imu.h"
 
 #include "ros2_common.h"
+#include "ros2_names.h"
 #include "ros2_types.h"
 
 #include <math.h>
@@ -16,7 +17,8 @@ void ros2_imu_init(ros2_imu *imu) {
     imu->last_result = DDS_RETCODE_OK;
 }
 
-bool ros2_imu_start(ros2_imu *imu, dds_entity_t participant, double acceleration_scale) {
+bool ros2_imu_start(ros2_imu *imu, dds_entity_t participant, double acceleration_scale,
+                    const char *ros_namespace) {
     imu->acceleration_scale = acceleration_scale;
     imu->accelerometer_result = HIDUSER_EnableAccelerometer();
     if (R_FAILED(imu->accelerometer_result)) {
@@ -38,8 +40,15 @@ bool ros2_imu_start(ros2_imu *imu, dds_entity_t participant, double acceleration
     }
     imu->sensors_enabled = true;
 
+    char topic_name[256];
+    if (!ros2_dds_name(topic_name, sizeof(topic_name), "rt", ros_namespace, "imu/data_raw")) {
+        imu->last_result = DDS_RETCODE_BAD_PARAMETER;
+        ros2_imu_stop(imu);
+        return false;
+    }
+
     ros2_topic_interface topic = {
-        .name = ROS2_IMU_TOPIC,
+        .name = topic_name,
         .type = &sensor_msgs_msg_dds__Imu__desc,
         .topic = imu->topic,
         .writer = imu->writer,

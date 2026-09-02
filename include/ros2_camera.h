@@ -66,7 +66,7 @@ typedef struct {
 void ros2_camera_init(ros2_camera *camera);
 void ros2_camera_config_defaults(ros2_camera_config *config);
 bool ros2_camera_start(ros2_camera *camera, dds_entity_t participant,
-                       const ros2_camera_config *config);
+                       const ros2_camera_config *config, const char *ros_namespace);
 bool ros2_camera_poll(ros2_camera *camera, uint64_t timestamp_ms, bool publish);
 int32_t ros2_camera_writer_matches(ros2_camera *camera);
 dds_entity_t ros2_camera_writer_entity(const ros2_camera *camera);

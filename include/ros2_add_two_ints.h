@@ -33,7 +33,8 @@ typedef struct {
 } ros2_add_two_ints;
 
 void ros2_add_two_ints_init(ros2_add_two_ints *service);
-bool ros2_add_two_ints_start(ros2_add_two_ints *service, dds_entity_t participant);
+bool ros2_add_two_ints_start(ros2_add_two_ints *service, dds_entity_t participant,
+                             const char *ros_namespace);
 int32_t ros2_add_two_ints_process(ros2_add_two_ints *service);
 int32_t ros2_add_two_ints_request_matches(ros2_add_two_ints *service);
 int32_t ros2_add_two_ints_response_matches(ros2_add_two_ints *service);

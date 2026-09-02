@@ -2,8 +2,18 @@
 
 #include <stdio.h>
 
+static const char *topic_display_name(char *buffer, size_t buffer_size,
+                                      const ui_snapshot *snapshot, const char *topic_name) {
+    if (snapshot->ros_namespace == NULL || strcmp(snapshot->ros_namespace, "/") == 0) {
+        return topic_name;
+    }
+    snprintf(buffer, buffer_size, "%s%s", snapshot->ros_namespace, topic_name);
+    return buffer;
+}
+
 static void topic_row(ui_context *ui, const ui_snapshot *snapshot, size_t index, float y) {
     const ui_topic_definition *topic = &ui_topics[index];
+    char topic_name[192];
     const bool selected = ui->selected_topic == index;
     const bool enabled = index == 0 ? snapshot->chatter_topic_enabled
                        : index == 1 ? snapshot->imu_topic_enabled
@@ -14,7 +24,8 @@ static void topic_row(ui_context *ui, const ui_snapshot *snapshot, size_t index,
     const bool active = enabled && available;
     ui_rect(8, y, 384, 43, selected ? ui->theme.selected : ui->theme.surface);
     ui_rect(8, y, 5, 43, selected ? ui->theme.accent : (active ? ui->theme.success : ui->theme.danger));
-    ui_text(ui, 22, y + 5, 0.40f, ui->theme.text, topic->name);
+        ui_text(ui, 22, y + 5, 0.40f, ui->theme.text,
+            topic_display_name(topic_name, sizeof(topic_name), snapshot, topic->name));
     ui_text(ui, 22, y + 25, 0.29f, ui->theme.muted, topic->type_name);
     ui_text(ui, 310, y + 14, 0.32f, active ? ui->theme.success : ui->theme.danger,
             active ? "ON" : "OFF");
@@ -53,7 +64,9 @@ void ui_view_topics_top(ui_context *ui, const ui_snapshot *snapshot) {
 void ui_view_topics_bottom(ui_context *ui, const ui_snapshot *snapshot) {
     const ui_controls *controls = app_ui_controls();
     const ui_topic_definition *topic = &ui_topics[ui->selected_topic];
-    ui_textf(ui, 8, 40, 0.43f, ui->theme.text, "%s", topic->name);
+    char topic_name[192];
+    ui_textf(ui, 8, 40, 0.43f, ui->theme.text, "%s",
+             topic_display_name(topic_name, sizeof(topic_name), snapshot, topic->name));
 
     if (ui->selected_topic == 0) {
         ui_panel(ui, 8, 62, 304, 60);
