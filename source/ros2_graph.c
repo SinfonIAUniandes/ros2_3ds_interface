@@ -29,6 +29,7 @@ bool ros2_graph_start(ros2_graph *graph, dds_entity_t participant) {
     dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 1);
     dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(10));
     dds_qset_durability(qos, DDS_DURABILITY_TRANSIENT_LOCAL);
+    dds_qset_userdata(qos, "ros2_3ds=1;", sizeof("ros2_3ds=1;") - 1u);
     graph->topic = dds_create_topic(participant,
                                     &rmw_dds_common_msg_dds__ParticipantEntitiesInfo__desc,
                                     ROS2_GRAPH_TOPIC, NULL, NULL);

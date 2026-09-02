@@ -43,9 +43,10 @@ export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 unset CYCLONEDDS_URI
 ros2 daemon stop
-ros2 topic info -v /camera/image_raw/compressed
-ros2 run image_view image_view --ros-args \
-  -r image:=/camera/image_raw/compressed
+ros2 topic info -v /nintendo_3ds/camera/image_raw/compressed
+ros2 run rqt_image_view rqt_image_view --ros-args \
+  -r image:=/nintendo_3ds/camera/image_raw \
+  -p image_transport:=compressed
 ```
 
 The Topics view on the 3DS exposes the stream state, published frame count,

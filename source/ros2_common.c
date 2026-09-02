@@ -1,5 +1,6 @@
 #include "ros2_common.h"
 
+#include <stdio.h>
 #include <string.h>
 
 bool ros2_create_qos(dds_qos_t **qos, int history_depth, bool reliable, int64_t lease_ns,
@@ -25,7 +26,17 @@ bool ros2_create_qos(dds_qos_t **qos, int history_depth, bool reliable, int64_t 
         dds_qset_ignorelocal(*qos, DDS_IGNORELOCAL_PARTICIPANT);
     }
     if (service_id != NULL && service_id[0] != '\0') {
-        dds_qset_userdata(*qos, service_id, strlen(service_id));
+        char user_data[96];
+        int length = snprintf(user_data, sizeof(user_data), "%sros2_3ds=1;", service_id);
+        if (length < 0 || (size_t)length >= sizeof(user_data)) {
+            dds_delete_qos(*qos);
+            *qos = NULL;
+            return false;
+        }
+        dds_qset_userdata(*qos, user_data, (size_t)length);
+    } else {
+        static const char user_data[] = "ros2_3ds=1;";
+        dds_qset_userdata(*qos, user_data, sizeof(user_data) - 1u);
     }
     return true;
 }
