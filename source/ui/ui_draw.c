@@ -73,6 +73,28 @@ void ui_button(ui_context *ui, float x, float y, float width, float height,
     ui_text(ui, x + 39, y + 9, 0.40f, ui->theme.text, label);
 }
 
+void ui_draw_image_preview(float x, float y, float width, float height,
+                          const uint8_t *data, uint32_t image_width,
+                          uint32_t image_height) {
+    if (data == NULL || image_width == 0 || image_height == 0) {
+        return;
+    }
+    const float cell_size = 4.0f;
+    const float step_x = (float)image_width / width;
+    const float step_y = (float)image_height / height;
+    for (float py = 0.0f; py < height; py += cell_size) {
+        const uint32_t src_y = (uint32_t)(py * step_y);
+        if (src_y >= image_height) continue;
+        for (float px = 0.0f; px < width; px += cell_size) {
+            const uint32_t src_x = (uint32_t)(px * step_x);
+            if (src_x >= image_width) continue;
+            const uint8_t *pixel = data + ((src_y * image_width + src_x) * 3u);
+            const u32 color = C2D_Color32(pixel[2], pixel[1], pixel[0], 255);
+            C2D_DrawRectSolid(x + px, y + py, 0.5f, cell_size, cell_size, color);
+        }
+    }
+}
+
 bool ui_hit(const touchPosition *touch, float x, float y, float width, float height) {
     return touch != NULL && touch->px >= x && touch->px < x + width &&
            touch->py >= y && touch->py < y + height;

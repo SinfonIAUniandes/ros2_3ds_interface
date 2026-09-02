@@ -1,6 +1,7 @@
 #include "ros2_imu.h"
 
-#include "sensor_msgs_imu.h"
+#include "ros2_common.h"
+#include "ros2_types.h"
 
 #include <math.h>
 #include <string.h>
@@ -37,34 +38,30 @@ bool ros2_imu_start(ros2_imu *imu, dds_entity_t participant, double acceleration
     }
     imu->sensors_enabled = true;
 
-    dds_qos_t *qos = dds_create_qos();
-    if (qos == NULL) {
-        imu->last_result = DDS_RETCODE_OUT_OF_RESOURCES;
-        goto fail;
-    }
-    dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 5);
-    dds_qset_reliability(qos, DDS_RELIABILITY_BEST_EFFORT, DDS_MSECS(100));
-    dds_qset_durability(qos, DDS_DURABILITY_VOLATILE);
+    ros2_topic_interface topic = {
+        .name = ROS2_IMU_TOPIC,
+        .type = &sensor_msgs_msg_dds__Imu__desc,
+        .topic = imu->topic,
+        .writer = imu->writer,
+        .reader = DDS_ENTITY_NIL,
+        .last_result = DDS_RETCODE_OK,
+        .writer_enabled = true,
+        .reader_enabled = false
+    };
 
-    imu->topic = dds_create_topic(participant, &sensor_msgs_msg_dds__Imu__desc,
-                                  ROS2_IMU_TOPIC, NULL, NULL);
-    if (imu->topic < 0) {
-        imu->last_result = imu->topic;
-        dds_delete_qos(qos);
-        goto fail;
+    if (!ros2_topic_create_endpoints(&topic, participant, 5, false, DDS_MSECS(100), false)) {
+        imu->last_result = topic.last_result;
+        ros2_topic_cleanup(&topic);
+        imu->topic = topic.topic;
+        imu->writer = topic.writer;
+        ros2_imu_stop(imu);
+        return false;
     }
-    imu->writer = dds_create_writer(participant, imu->topic, qos, NULL);
-    dds_delete_qos(qos);
-    if (imu->writer < 0) {
-        imu->last_result = imu->writer;
-        goto fail;
-    }
-    imu->last_result = DDS_RETCODE_OK;
+
+    imu->topic = topic.topic;
+    imu->writer = topic.writer;
+    imu->last_result = topic.last_result;
     return true;
-
-fail:
-    ros2_imu_stop(imu);
-    return false;
 }
 
 bool ros2_imu_publish(ros2_imu *imu, uint64_t timestamp_ms) {
@@ -126,12 +123,21 @@ dds_entity_t ros2_imu_writer_entity(const ros2_imu *imu) {
 }
 
 void ros2_imu_stop(ros2_imu *imu) {
-    if (imu->topic > DDS_ENTITY_NIL) {
-        dds_return_t result = dds_delete(imu->topic);
-        if (result != DDS_RETCODE_OK) imu->last_result = result;
-    }
-    imu->topic = DDS_ENTITY_NIL;
-    imu->writer = DDS_ENTITY_NIL;
+    ros2_topic_interface topic = {
+        .name = ROS2_IMU_TOPIC,
+        .type = &sensor_msgs_msg_dds__Imu__desc,
+        .topic = imu->topic,
+        .writer = imu->writer,
+        .reader = DDS_ENTITY_NIL,
+        .last_result = imu->last_result,
+        .writer_enabled = true,
+        .reader_enabled = false
+    };
+
+    ros2_topic_cleanup(&topic);
+    imu->topic = topic.topic;
+    imu->writer = topic.writer;
+    imu->last_result = topic.last_result;
     if (imu->sensors_enabled) {
         HIDUSER_DisableGyroscope();
         HIDUSER_DisableAccelerometer();

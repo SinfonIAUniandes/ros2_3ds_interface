@@ -22,6 +22,11 @@ not require rebuilding the application.
 | `imu_enabled` | `1` | Enables the motion sensors and IMU writer |
 | `imu_publish_hz` | `50` | IMU publication rate, from 1 through 100 Hz |
 | `imu_accel_mps2_per_count` | `0.01915361328125` | Accelerometer calibration scale |
+| `camera_enabled` | `0` | Enables the JPEG camera stream |
+| `camera_source` | `inner` | `inner`, `outer_left`, or `outer_right` |
+| `camera_resolution` | `qqvga` | `qqvga` or `qvga` |
+| `camera_fps` | `5` | `5`, `10`, or `15` FPS |
+| `camera_jpeg_quality` | `70` | JPEG quality, from 40 to 85 |
 
 Leave `peer_ip` empty for automatic multicast and subnet-broadcast discovery.
 
@@ -38,6 +43,11 @@ dds_enabled=1
 imu_enabled=1
 imu_publish_hz=50
 imu_accel_mps2_per_count=0.01915361328125
+camera_enabled=0
+camera_source=inner
+camera_resolution=qqvga
+camera_fps=5
+camera_jpeg_quality=70
 ```
 
 Replace `192.0.2.10` with the physical LAN address of one ROS 2 host. Do not

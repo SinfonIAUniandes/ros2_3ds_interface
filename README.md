@@ -77,6 +77,10 @@ ros2 topic echo /imu/data_raw sensor_msgs/msg/Imu
 ros2 topic hz /imu/data_raw
 ```
 
+The optional JPEG camera stream publishes on `/camera/image_raw/compressed`.
+Configure it on the SD card and view it with standard ROS image tools; see
+[Camera streaming](docs/features/camera-streaming.md).
+
 To call the built-in service:
 
 ```sh
@@ -144,6 +148,7 @@ Start with the [documentation index](docs/README.md).
 
 - `/chatter` publisher and subscriber using `std_msgs/msg/String`
 - `/imu/data_raw` publisher using `sensor_msgs/msg/Imu`
+- `/camera/image_raw/compressed` JPEG publisher using `sensor_msgs/msg/CompressedImage`
 - `/add_two_ints` server using `example_interfaces/srv/AddTwoInts`
 - ROS 2 graph publication for the 3DS node and endpoints
 - IPv4 UDP transport on the local network
@@ -152,6 +157,9 @@ Start with the [documentation index](docs/README.md).
 
 See [IMU streaming](docs/features/imu-streaming.md) for units, frame semantics,
 frequency, and calibration details.
+
+See [Camera streaming](docs/features/camera-streaming.md) for camera settings
+and host-side viewing.
 
 See [AddTwoInts service](docs/features/add-two-ints-service.md) for the service
 wire mapping and validation steps.

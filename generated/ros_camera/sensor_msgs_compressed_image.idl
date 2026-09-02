@@ -1,0 +1,13 @@
+#include "../ros_imu/sensor_msgs_imu.idl"
+
+module sensor_msgs {
+  module msg {
+    module dds_ {
+      struct CompressedImage_ {
+        std_msgs::msg::dds_::Header_ header;
+        string format;
+        sequence<octet> data;
+      };
+    };
+  };
+};

@@ -51,6 +51,7 @@ module sensor_msgs {
         geometry_msgs::msg::dds_::Vector3_ linear_acceleration;
         double linear_acceleration_covariance[9];
       };
+
     };
   };
 };

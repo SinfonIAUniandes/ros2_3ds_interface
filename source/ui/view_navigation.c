@@ -68,20 +68,21 @@ void ui_view_menu_bottom(ui_context *ui, const ui_snapshot *snapshot) {
 void ui_view_settings_top(ui_context *ui, const ui_snapshot *snapshot) {
     (void)snapshot;
     const ui_controls *controls = app_ui_controls();
-    ui_header(ui, "Settings", "Build-time defaults with SD overrides");
+    ui_header(ui, "Settings", "Camera config with SD persistence");
     ui_panel(ui, 8, 58, 188, 164);
-    ui_text(ui, 18, 69, 0.37f, ui->theme.muted, "RUNTIME ACTIONS");
-    ui_textf(ui, 18, 94, 0.40f, ui->theme.text, "%s  Publish once", app_ui_control_label(controls->publish_once));
-    ui_textf(ui, 18, 118, 0.40f, ui->theme.text, "%s  Auto publish", app_ui_control_label(controls->toggle_publishing));
-    ui_textf(ui, 18, 142, 0.40f, ui->theme.text, "%s  Toggle listener", app_ui_control_label(controls->toggle_listener));
-    ui_textf(ui, 18, 166, 0.40f, ui->theme.text, "%s  Send probe", app_ui_control_label(controls->send_probe));
-    ui_textf(ui, 18, 190, 0.40f, ui->theme.text, "%s  Exit", app_ui_control_label(controls->exit));
+    ui_text(ui, 18, 69, 0.37f, ui->theme.muted, "CAMERA");
+    ui_textf(ui, 18, 94, 0.40f, ui->theme.text, "Source: %s", snapshot->camera_source == 0 ? "inner" :
+             snapshot->camera_source == 1 ? "outer_left" : "outer_right");
+    ui_textf(ui, 18, 118, 0.40f, ui->theme.text, "Resolution: %s",
+             snapshot->camera_resolution == 0 ? "QQVGA" : "QVGA");
+    ui_textf(ui, 18, 142, 0.40f, ui->theme.text, "FPS: %u", (unsigned int)snapshot->camera_fps);
+    ui_textf(ui, 18, 166, 0.40f, ui->theme.text, "Quality: %u", (unsigned int)snapshot->camera_quality);
 
     ui_panel(ui, 204, 58, 188, 164);
     ui_text(ui, 214, 69, 0.37f, ui->theme.muted, "NAVIGATION");
     ui_textf(ui, 214, 94, 0.40f, ui->theme.text, "%s / %s  Tabs",
              app_ui_control_label(controls->previous_view), app_ui_control_label(controls->next_view));
-    ui_textf(ui, 214, 124, 0.40f, ui->theme.text, "%s / %s  Items",
+    ui_textf(ui, 214, 124, 0.40f, ui->theme.text, "%s / %s  Camera",
              app_ui_control_label(controls->previous_item), app_ui_control_label(controls->next_item));
     ui_textf(ui, 214, 154, 0.40f, ui->theme.text, "%s  Activate", app_ui_control_label(controls->activate));
     ui_textf(ui, 214, 184, 0.40f, ui->theme.text, "%s  Back", app_ui_control_label(controls->back));
@@ -95,6 +96,6 @@ void ui_view_settings_bottom(ui_context *ui, const ui_snapshot *snapshot) {
     ui_text(ui, 18, 99, 0.35f, ui->theme.text, "romfs:/ui/theme.ini");
     ui_text(ui, 18, 121, 0.34f, ui->theme.muted, "Controls");
     ui_text(ui, 18, 141, 0.35f, ui->theme.text, "romfs:/ui/controls.ini");
-    ui_text(ui, 8, 185, 0.31f, ui->theme.muted, "SD overrides load from /3ds/ros2_3ds_interface/");
+    ui_text(ui, 8, 185, 0.31f, ui->theme.muted, "SD override: /3ds/ros2_3ds_interface/config.ini");
     ui_text(ui, 8, 218, 0.34f, ui->theme.muted, "B returns to Menu");
 }

@@ -1,6 +1,7 @@
 #include "ros2_chatter.h"
 
-#include "std_msgs_string.h"
+#include "ros2_common.h"
+#include "ros2_types.h"
 
 void ros2_chatter_init(ros2_chatter *chatter) {
     chatter->topic = DDS_ENTITY_NIL;
@@ -12,54 +13,31 @@ void ros2_chatter_init(ros2_chatter *chatter) {
 }
 
 bool ros2_chatter_start(ros2_chatter *chatter, dds_entity_t participant) {
-    dds_qos_t *writer_qos = dds_create_qos();
-    dds_qos_t *reader_qos = dds_create_qos();
-    if (writer_qos == NULL || reader_qos == NULL) {
-        dds_delete_qos(writer_qos);
-        dds_delete_qos(reader_qos);
-        ros2_chatter_stop(chatter);
-        chatter->last_result = DDS_RETCODE_OUT_OF_RESOURCES;
+    ros2_topic_interface topic = {
+        .name = "rt/chatter",
+        .type = &std_msgs_msg_dds__String__desc,
+        .topic = chatter->topic,
+        .writer = chatter->writer,
+        .reader = chatter->reader,
+        .last_result = DDS_RETCODE_OK,
+        .writer_enabled = true,
+        .reader_enabled = true
+    };
+
+    if (!ros2_topic_create_endpoints(&topic, participant, 10, true, DDS_SECS(10), true)) {
+        chatter->last_result = topic.last_result;
+        ros2_topic_cleanup(&topic);
+        chatter->topic = topic.topic;
+        chatter->writer = topic.writer;
+        chatter->reader = topic.reader;
         return false;
     }
 
-    dds_qset_history(writer_qos, DDS_HISTORY_KEEP_LAST, 10);
-    dds_qset_reliability(writer_qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(10));
-    dds_qset_durability(writer_qos, DDS_DURABILITY_VOLATILE);
-    dds_qset_history(reader_qos, DDS_HISTORY_KEEP_LAST, 10);
-    dds_qset_reliability(reader_qos, DDS_RELIABILITY_RELIABLE, DDS_SECS(10));
-    dds_qset_durability(reader_qos, DDS_DURABILITY_VOLATILE);
-    dds_qset_ignorelocal(reader_qos, DDS_IGNORELOCAL_PARTICIPANT);
-
-    chatter->topic = dds_create_topic(participant, &std_msgs_msg_dds__String__desc, "rt/chatter", NULL, NULL);
-    if (chatter->topic < 0) {
-        chatter->last_result = chatter->topic;
-        goto fail;
-    }
-
-    chatter->writer = dds_create_writer(participant, chatter->topic, writer_qos, NULL);
-    if (chatter->writer < 0) {
-        chatter->last_result = chatter->writer;
-        goto fail;
-    }
-
-    chatter->reader = dds_create_reader(participant, chatter->topic, reader_qos, NULL);
-    if (chatter->reader < 0) {
-        chatter->last_result = chatter->reader;
-        goto fail;
-    }
-
-    dds_delete_qos(writer_qos);
-    dds_delete_qos(reader_qos);
-    chatter->last_result = DDS_RETCODE_OK;
+    chatter->topic = topic.topic;
+    chatter->writer = topic.writer;
+    chatter->reader = topic.reader;
+    chatter->last_result = topic.last_result;
     return true;
-
-fail:
-    dds_return_t result = chatter->last_result;
-    dds_delete_qos(writer_qos);
-    dds_delete_qos(reader_qos);
-    ros2_chatter_stop(chatter);
-    chatter->last_result = result;
-    return false;
 }
 
 bool ros2_chatter_publish(ros2_chatter *chatter, const char *data) {
@@ -148,13 +126,20 @@ int32_t ros2_chatter_reader_incompatible_qos(ros2_chatter *chatter, uint32_t *la
 }
 
 void ros2_chatter_stop(ros2_chatter *chatter) {
-    if (chatter->topic > DDS_ENTITY_NIL) {
-        dds_return_t result = dds_delete(chatter->topic);
-        if (result != DDS_RETCODE_OK) {
-            chatter->last_result = result;
-        }
-    }
-    chatter->topic = DDS_ENTITY_NIL;
-    chatter->writer = DDS_ENTITY_NIL;
-    chatter->reader = DDS_ENTITY_NIL;
+    ros2_topic_interface topic = {
+        .name = "rt/chatter",
+        .type = &std_msgs_msg_dds__String__desc,
+        .topic = chatter->topic,
+        .writer = chatter->writer,
+        .reader = chatter->reader,
+        .last_result = chatter->last_result,
+        .writer_enabled = true,
+        .reader_enabled = true
+    };
+
+    ros2_topic_cleanup(&topic);
+    chatter->topic = topic.topic;
+    chatter->writer = topic.writer;
+    chatter->reader = topic.reader;
+    chatter->last_result = topic.last_result;
 }

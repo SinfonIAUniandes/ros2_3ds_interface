@@ -1,6 +1,7 @@
 #include "ros2_add_two_ints.h"
 
-#include "add_two_ints.h"
+#include "ros2_common.h"
+#include "ros2_types.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -43,50 +44,39 @@ void ros2_add_two_ints_init(ros2_add_two_ints *service) {
 
 bool ros2_add_two_ints_start(ros2_add_two_ints *service, dds_entity_t participant) {
     if (!make_service_id(service, participant)) return false;
-    dds_qos_t *qos = dds_create_qos();
-    if (qos == NULL) {
-        service->last_result = DDS_RETCODE_OUT_OF_RESOURCES;
+
+    ros2_service_interface iface = {
+        .name = ROS2_ADD_TWO_INTS_SERVICE,
+        .request_name = ROS2_ADD_TWO_INTS_REQUEST_TOPIC,
+        .response_name = ROS2_ADD_TWO_INTS_RESPONSE_TOPIC,
+        .request_type = &example_interfaces_srv_dds__AddTwoInts_Request__desc,
+        .response_type = &example_interfaces_srv_dds__AddTwoInts_Response__desc,
+        .request_topic = service->request_topic,
+        .response_topic = service->response_topic,
+        .request_reader = service->request_reader,
+        .response_writer = service->response_writer,
+        .last_result = DDS_RETCODE_OK,
+        .service_id = service->service_id,
+        .running = false
+    };
+
+    if (!ros2_service_create_endpoints(&iface, participant, 10, true, DDS_INFINITY, false)) {
+        service->last_result = iface.last_result;
+        ros2_service_cleanup(&iface);
+        service->request_topic = iface.request_topic;
+        service->response_topic = iface.response_topic;
+        service->request_reader = iface.request_reader;
+        service->response_writer = iface.response_writer;
         return false;
     }
-    dds_qset_history(qos, DDS_HISTORY_KEEP_LAST, 10);
-    dds_qset_reliability(qos, DDS_RELIABILITY_RELIABLE, DDS_INFINITY);
-    dds_qset_durability(qos, DDS_DURABILITY_VOLATILE);
-    dds_qset_writer_data_lifecycle(qos, false);
-    dds_qset_userdata(qos, service->service_id, strlen(service->service_id));
 
-    service->request_topic = dds_create_topic(participant,
-        &example_interfaces_srv_dds__AddTwoInts_Request__desc,
-        ROS2_ADD_TWO_INTS_REQUEST_TOPIC, NULL, NULL);
-    if (service->request_topic < 0) {
-        service->last_result = service->request_topic;
-        goto fail;
-    }
-    service->response_topic = dds_create_topic(participant,
-        &example_interfaces_srv_dds__AddTwoInts_Response__desc,
-        ROS2_ADD_TWO_INTS_RESPONSE_TOPIC, NULL, NULL);
-    if (service->response_topic < 0) {
-        service->last_result = service->response_topic;
-        goto fail;
-    }
-    service->request_reader = dds_create_reader(participant, service->request_topic, qos, NULL);
-    if (service->request_reader < 0) {
-        service->last_result = service->request_reader;
-        goto fail;
-    }
-    service->response_writer = dds_create_writer(participant, service->response_topic, qos, NULL);
-    if (service->response_writer < 0) {
-        service->last_result = service->response_writer;
-        goto fail;
-    }
-    dds_delete_qos(qos);
-    service->last_result = DDS_RETCODE_OK;
+    service->request_topic = iface.request_topic;
+    service->response_topic = iface.response_topic;
+    service->request_reader = iface.request_reader;
+    service->response_writer = iface.response_writer;
+    service->last_result = iface.last_result;
     service->running = true;
     return true;
-
-fail:
-    dds_delete_qos(qos);
-    ros2_add_two_ints_stop(service);
-    return false;
 }
 
 int32_t ros2_add_two_ints_process(ros2_add_two_ints *service) {
@@ -168,19 +158,26 @@ int32_t ros2_add_two_ints_request_incompatible_qos(ros2_add_two_ints *service,
 }
 
 void ros2_add_two_ints_stop(ros2_add_two_ints *service) {
-    const dds_entity_t entities[] = {
-        service->request_reader, service->response_writer,
-        service->request_topic, service->response_topic
+    ros2_service_interface iface = {
+        .name = ROS2_ADD_TWO_INTS_SERVICE,
+        .request_name = ROS2_ADD_TWO_INTS_REQUEST_TOPIC,
+        .response_name = ROS2_ADD_TWO_INTS_RESPONSE_TOPIC,
+        .request_type = &example_interfaces_srv_dds__AddTwoInts_Request__desc,
+        .response_type = &example_interfaces_srv_dds__AddTwoInts_Response__desc,
+        .request_topic = service->request_topic,
+        .response_topic = service->response_topic,
+        .request_reader = service->request_reader,
+        .response_writer = service->response_writer,
+        .last_result = service->last_result,
+        .service_id = service->service_id,
+        .running = service->running
     };
-    for (size_t index = 0; index < sizeof(entities) / sizeof(entities[0]); index++) {
-        if (entities[index] > DDS_ENTITY_NIL) {
-            dds_return_t result = dds_delete(entities[index]);
-            if (result != DDS_RETCODE_OK) service->last_result = result;
-        }
-    }
-    service->request_topic = DDS_ENTITY_NIL;
-    service->response_topic = DDS_ENTITY_NIL;
-    service->request_reader = DDS_ENTITY_NIL;
-    service->response_writer = DDS_ENTITY_NIL;
-    service->running = false;
+
+    ros2_service_cleanup(&iface);
+    service->request_topic = iface.request_topic;
+    service->response_topic = iface.response_topic;
+    service->request_reader = iface.request_reader;
+    service->response_writer = iface.response_writer;
+    service->last_result = iface.last_result;
+    service->running = iface.running;
 }

@@ -55,6 +55,7 @@ bool app_ui_init(void) {
     g_ui.top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     g_ui.bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
     g_ui.view = UI_VIEW_HOME;
+    app_ui_init_camera_settings();
     ui_theme_defaults(&g_ui.theme);
     ui_theme_load(&g_ui.theme, "romfs:/ui/theme.ini");
     ui_theme_load(&g_ui.theme, "sdmc:/3ds/ros2_3ds_interface/theme.ini");
@@ -106,7 +107,17 @@ ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch) {
                                      : (uint8_t)(g_ui.selected_topic - 1);
         if (actions & UI_ACTION_ACTIVATE) {
             actions |= g_ui.selected_topic == 0 ? UI_ACTION_TOGGLE_CHATTER_TOPIC
-                                                 : UI_ACTION_TOGGLE_IMU_TOPIC;
+                     : g_ui.selected_topic == 1 ? UI_ACTION_TOGGLE_IMU_TOPIC
+                                                 : UI_ACTION_TOGGLE_CAMERA_TOPIC;
+        }
+    } else if (g_ui.view == UI_VIEW_SETTINGS) {
+        if (actions & UI_ACTION_NEXT_ITEM) {
+            app_ui_cycle_camera_setting(1);
+            actions |= UI_ACTION_CAMERA_SETTING_NEXT;
+        }
+        if (actions & UI_ACTION_PREVIOUS_ITEM) {
+            app_ui_cycle_camera_setting(-1);
+            actions |= UI_ACTION_CAMERA_SETTING_PREVIOUS;
         }
     } else if (g_ui.view == UI_VIEW_MENU) {
         if (actions & UI_ACTION_NEXT_ITEM) g_ui.selected_menu_item = (g_ui.selected_menu_item + 1) % 3;
@@ -151,4 +162,87 @@ const ui_controls *app_ui_controls(void) {
 
 const char *app_ui_control_label(u32 mask) {
     return ui_control_label(mask);
+}
+
+uint8_t app_ui_camera_setting_index(void) {
+    return g_ui.camera_setting_index;
+}
+
+void app_ui_set_camera_settings(const ros2_camera_config *config) {
+    if (config == NULL) {
+        ros2_camera_config_defaults(&g_ui.camera_config);
+        return;
+    }
+    g_ui.camera_config = *config;
+    if (g_ui.camera_setting_index > 3) {
+        g_ui.camera_setting_index = 0;
+    }
+}
+
+void app_ui_cycle_camera_setting(int direction) {
+    if (direction >= 0) {
+        g_ui.camera_setting_index = (g_ui.camera_setting_index + 1u) % 4u;
+    } else {
+        if (g_ui.camera_setting_index == 0u) {
+            g_ui.camera_setting_index = 3u;
+        } else {
+            g_ui.camera_setting_index--;
+        }
+    }
+}
+
+bool app_ui_apply_camera_setting(int direction, ros2_camera_config *config) {
+    if (config == NULL) {
+        return false;
+    }
+    switch (g_ui.camera_setting_index) {
+        case 0:
+            if (direction > 0) {
+                config->source = (config->source + 1u) % 3u;
+            } else if (config->source == 0u) {
+                config->source = ROS2_CAMERA_SOURCE_OUTER_RIGHT;
+            } else {
+                config->source--;
+            }
+            return true;
+        case 1:
+            if (direction > 0) {
+                config->resolution = (config->resolution == ROS2_CAMERA_RESOLUTION_QQVGA)
+                    ? ROS2_CAMERA_RESOLUTION_QVGA : ROS2_CAMERA_RESOLUTION_QQVGA;
+            } else {
+                config->resolution = (config->resolution == ROS2_CAMERA_RESOLUTION_QQVGA)
+                    ? ROS2_CAMERA_RESOLUTION_QQVGA : ROS2_CAMERA_RESOLUTION_QQVGA;
+            }
+            return true;
+        case 2: {
+            static const uint32_t fps_values[] = { 5u, 10u, 15u };
+            size_t index = 0;
+            for (; index < sizeof(fps_values) / sizeof(fps_values[0]); index++) {
+                if (fps_values[index] == config->fps) {
+                    break;
+                }
+            }
+            if (index >= sizeof(fps_values) / sizeof(fps_values[0])) {
+                config->fps = 5u;
+                index = 0u;
+            }
+            if (direction > 0) index = (index + 1u) % (sizeof(fps_values) / sizeof(fps_values[0]));
+            else if (index == 0u) index = (sizeof(fps_values) / sizeof(fps_values[0])) - 1u;
+            else index--;
+            config->fps = fps_values[index];
+            return true;
+        }
+        case 3:
+            config->jpeg_quality += direction > 0 ? 5 : -5;
+            if (config->jpeg_quality < 40) config->jpeg_quality = 40;
+            if (config->jpeg_quality > 85) config->jpeg_quality = 85;
+            return true;
+        default:
+            return false;
+    }
+}
+
+void app_ui_init_camera_settings(void) {
+    ros2_camera_config_defaults(&g_ui.camera_config);
+    g_ui.camera_setting_index = 0u;
 }

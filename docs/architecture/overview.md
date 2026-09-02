@@ -8,9 +8,11 @@ hardware. It does not use Micro XRCE-DDS, an agent, `rcl`, or `rclc` at runtime.
 1. **libctru platform layer** initializes graphics, input, ROMFS, the SD card,
    and the `soc:u` network service.
 2. **Cyclone DDS 3DS port** provides DDS over the console's IPv4 UDP sockets.
-3. **DDS runtime wrapper** owns the domain and participant lifecycle.
-4. **ROS endpoints** publish `/chatter` and ROS graph metadata using generated
-   Cyclone DDS type descriptors.
+3. **DDS runtime wrapper** owns the domain and participant lifecycle and wires
+   the reusable topic/service modules together.
+4. **ROS endpoints** publish `/chatter`, `/imu/data_raw`, optional
+   `/camera/image_raw/compressed`, `/add_two_ints` service traffic, and ROS
+   graph metadata using generated Cyclone DDS type descriptors.
 5. **Application loop** handles controls, periodic publishing, polling,
    diagnostics, and rendering.
 
@@ -38,12 +40,15 @@ flowchart TB
 | Path | Responsibility |
 | --- | --- |
 | `source/main.c` | 3DS lifecycle, input, network setup, UI, and scheduling |
-| `source/dds_runtime.c` | DDS domain and participant lifecycle |
+| `source/dds_runtime.c` | DDS domain and participant lifecycle plus feature wiring |
 | `source/ros2_chatter.c` | `/chatter` topic, writer, reader, QoS, and samples |
+| `source/ros2_imu.c` | IMU publisher lifecycle, HID polling, and sample conversion |
+| `source/ros2_camera.c` | JPEG camera stream and camera-info publication |
+| `source/ros2_add_two_ints.c` | `AddTwoInts` request/response service implementation |
 | `source/ros2_graph.c` | `ros_discovery_info` publication |
-| `source/logging/app_log.c` | Screen log, SD log, and error snapshots |
-| `generated/ros_types/` | Cyclone DDS descriptor for `std_msgs/msg/String` |
-| `generated/ros_graph/` | Cyclone DDS descriptor for ROS graph metadata |
+| `source/ros2_common.c` | Shared DDS QoS and endpoint helpers |
+| `include/ros2_types.h` | Stable compatibility layer over generated DDS messages |
+| `generated/` | Generated Cyclone DDS descriptors for ROS types and service payloads |
 | `romfs/config.ini` | Built-in runtime defaults |
 
 ## Lifecycle
@@ -57,8 +62,8 @@ Startup proceeds in this order:
 5. Create `/chatter` endpoints and publish ROS graph metadata.
 6. Enter the UI and communication loop.
 
-Shutdown deletes graph and chatter entities, deletes the participant and
-domain, closes sockets and logs, and finally stops `soc:u`.
+Shutdown deletes graph, IMU, camera, and service entities, deletes the
+participant and domain, closes sockets and logs, and finally stops `soc:u`.
 
 ## Cyclone DDS Dependency
 

@@ -50,12 +50,14 @@ fail:
 
 bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
                         dds_entity_t chatter_writer, dds_entity_t chatter_reader,
-                        dds_entity_t imu_writer, dds_entity_t service_request_reader,
+                        dds_entity_t imu_writer, dds_entity_t camera_writer,
+                        dds_entity_t service_request_reader,
                         dds_entity_t service_response_writer) {
     dds_guid_t participant_guid;
     dds_guid_t writer_guid;
     dds_guid_t reader_guid;
     dds_guid_t imu_writer_guid;
+    dds_guid_t camera_writer_guid;
     dds_guid_t service_request_reader_guid;
     dds_guid_t service_response_writer_guid;
     graph->last_result = dds_get_guid(participant, &participant_guid);
@@ -75,6 +77,11 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
         graph->last_result = dds_get_guid(imu_writer, &imu_writer_guid);
         if (graph->last_result != DDS_RETCODE_OK) return false;
     }
+    bool has_camera_writer = camera_writer > DDS_ENTITY_NIL;
+    if (has_camera_writer) {
+        graph->last_result = dds_get_guid(camera_writer, &camera_writer_guid);
+        if (graph->last_result != DDS_RETCODE_OK) return false;
+    }
     bool has_service = service_request_reader > DDS_ENTITY_NIL &&
                        service_response_writer > DDS_ENTITY_NIL;
     if (has_service) {
@@ -84,7 +91,7 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
         if (graph->last_result != DDS_RETCODE_OK) return false;
     }
 
-    rmw_dds_common_msg_dds__Gid_ writer_gids[3] = { { { 0 } }, { { 0 } }, { { 0 } } };
+    rmw_dds_common_msg_dds__Gid_ writer_gids[4] = { { { 0 } }, { { 0 } }, { { 0 } }, { { 0 } } };
     rmw_dds_common_msg_dds__Gid_ reader_gids[2] = { { { 0 } }, { { 0 } } };
     rmw_dds_common_msg_dds__NodeEntitiesInfo_ node = { 0 };
     rmw_dds_common_msg_dds__ParticipantEntitiesInfo_ sample = { 0 };
@@ -94,6 +101,9 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
     memcpy(writer_gids[writer_count++].data, writer_guid.v, sizeof(writer_gids[0].data));
     if (has_imu_writer) {
         memcpy(writer_gids[writer_count++].data, imu_writer_guid.v, sizeof(writer_gids[0].data));
+    }
+    if (has_camera_writer) {
+        memcpy(writer_gids[writer_count++].data, camera_writer_guid.v, sizeof(writer_gids[0].data));
     }
     if (has_service) {
         memcpy(writer_gids[writer_count++].data, service_response_writer_guid.v,

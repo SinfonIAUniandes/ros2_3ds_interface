@@ -15,6 +15,8 @@ typedef struct {
     ui_controls controls;
     uint8_t selected_topic;
     uint8_t selected_menu_item;
+    uint8_t camera_setting_index;
+    ros2_camera_config camera_config;
 } ui_context;
 
 typedef struct {
@@ -45,6 +47,9 @@ void ui_metric(ui_context *ui, float x, float y, const char *label, const char *
                u32 value_color);
 void ui_button(ui_context *ui, float x, float y, float width, float height,
                const char *key, const char *label, bool active);
+void ui_draw_image_preview(float x, float y, float width, float height,
+                          const uint8_t *data, uint32_t image_width,
+                          uint32_t image_height);
 bool ui_hit(const touchPosition *touch, float x, float y, float width, float height);
 bool ui_is_primary_view(ui_view_id view);
 void ui_set_view(ui_context *ui, ui_view_id view);

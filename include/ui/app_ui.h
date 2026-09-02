@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ros2_camera.h"
+
 typedef enum {
     UI_VIEW_HOME,
     UI_VIEW_TOPICS,
@@ -31,7 +33,10 @@ typedef enum {
     UI_ACTION_ACTIVATE = 1u << 9,
     UI_ACTION_BACK = 1u << 10,
     UI_ACTION_TOGGLE_CHATTER_TOPIC = 1u << 11,
-    UI_ACTION_TOGGLE_IMU_TOPIC = 1u << 12
+    UI_ACTION_TOGGLE_IMU_TOPIC = 1u << 12,
+    UI_ACTION_TOGGLE_CAMERA_TOPIC = 1u << 13,
+    UI_ACTION_CAMERA_SETTING_NEXT = 1u << 14,
+    UI_ACTION_CAMERA_SETTING_PREVIOUS = 1u << 15
 } ui_action;
 
 typedef struct {
@@ -74,6 +79,7 @@ typedef struct {
     bool publishing;
     bool chatter_topic_enabled;
     bool imu_topic_enabled;
+    bool camera_topic_enabled;
     bool listening;
     bool log_has_error;
     bool probe_socket_ready;
@@ -106,6 +112,20 @@ typedef struct {
     int32_t imu_writer_matches;
     double imu_angular_velocity[3];
     double imu_linear_acceleration[3];
+    bool camera_available;
+    uint32_t camera_source;
+    uint32_t camera_resolution;
+    uint32_t camera_fps;
+    uint32_t camera_quality;
+    uint64_t camera_captured;
+    uint64_t camera_encoded;
+    uint64_t camera_published;
+    uint64_t camera_dropped;
+    uint32_t camera_jpeg_bytes;
+    const uint8_t *camera_preview;
+    uint32_t camera_preview_width;
+    uint32_t camera_preview_height;
+    int32_t camera_writer_matches;
     bool add_two_ints_running;
     uint64_t add_two_ints_requests_handled;
     int32_t add_two_ints_request_matches;
@@ -136,5 +156,10 @@ void app_ui_render(const ui_snapshot *snapshot);
 ui_view_id app_ui_current_view(void);
 const ui_controls *app_ui_controls(void);
 const char *app_ui_control_label(u32 mask);
+uint8_t app_ui_camera_setting_index(void);
+void app_ui_set_camera_settings(const ros2_camera_config *config);
+void app_ui_cycle_camera_setting(int direction);
+void app_ui_init_camera_settings(void);
+bool app_ui_apply_camera_setting(int direction, ros2_camera_config *config);
 
 #endif

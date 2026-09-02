@@ -24,7 +24,8 @@
 #define STATUS_REFRESH_MS 500
 #define GRAPH_REFRESH_MS 5000
 #define RTPS_LOG_INTERVAL_MS 5000
-#define APP_BUILD_ID "20260817-service-cdr-diagnostics"
+#define CAMERA_PUBLISH_INTERVAL_MS 1000
+#define APP_BUILD_ID "20260817-camera-trace"
 #define DEFAULT_IMU_PUBLISH_HZ 50
 #define DEFAULT_IMU_ACCEL_SCALE (9.80665 / 512.0)
 
@@ -36,6 +37,8 @@ typedef struct {
     bool dds_enabled;
     bool peer_ip_invalid;
     bool imu_enabled;
+    bool camera_enabled;
+    ros2_camera_config camera;
     u32 imu_publish_hz;
     double imu_acceleration_scale;
 } probe_config;
@@ -77,6 +80,8 @@ static void load_config_defaults(probe_config *config) {
     config->domain_id = 0;
     config->dds_enabled = true;
     config->imu_enabled = true;
+    config->camera_enabled = false;
+    ros2_camera_config_defaults(&config->camera);
     config->imu_publish_hz = DEFAULT_IMU_PUBLISH_HZ;
     config->imu_acceleration_scale = DEFAULT_IMU_ACCEL_SCALE;
 }
@@ -133,6 +138,21 @@ static bool load_config_file(probe_config *config, const char *path) {
             config->dds_enabled = strtol(value, NULL, 10) != 0;
         } else if (strcmp(key, "imu_enabled") == 0) {
             config->imu_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "camera_enabled") == 0) {
+            config->camera_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "camera_source") == 0) {
+            if (strcmp(value, "inner") == 0) config->camera.source = ROS2_CAMERA_SOURCE_INNER;
+            else if (strcmp(value, "outer_left") == 0) config->camera.source = ROS2_CAMERA_SOURCE_OUTER_LEFT;
+            else if (strcmp(value, "outer_right") == 0) config->camera.source = ROS2_CAMERA_SOURCE_OUTER_RIGHT;
+        } else if (strcmp(key, "camera_resolution") == 0) {
+            if (strcmp(value, "qqvga") == 0) config->camera.resolution = ROS2_CAMERA_RESOLUTION_QQVGA;
+            else if (strcmp(value, "qvga") == 0) config->camera.resolution = ROS2_CAMERA_RESOLUTION_QVGA;
+        } else if (strcmp(key, "camera_fps") == 0) {
+            long fps = strtol(value, NULL, 10);
+            if (fps == 5 || fps == 10 || fps == 15) config->camera.fps = (uint32_t)fps;
+        } else if (strcmp(key, "camera_jpeg_quality") == 0) {
+            long quality = strtol(value, NULL, 10);
+            if (quality >= 40 && quality <= 85) config->camera.jpeg_quality = (int)quality;
         } else if (strcmp(key, "imu_publish_hz") == 0) {
             long publish_hz = strtol(value, NULL, 10);
             if (publish_hz >= 1 && publish_hz <= 100) {
@@ -349,6 +369,7 @@ int main(void) {
     int32_t last_writer_qos_rejections = -2;
     int32_t last_reader_qos_rejections = -2;
     int32_t last_imu_matches = -2;
+    int32_t last_camera_matches = -2;
     int32_t last_service_request_matches = -2;
     int32_t last_service_response_matches = -2;
     int32_t last_service_request_qos_rejections = -2;
@@ -365,7 +386,8 @@ int main(void) {
         app_log_write(APP_LOG_INFO, "DDS compatibility: Cyclone DDS defaults");
         bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                          broadcast_ip_text, config.imu_enabled,
-                                         config.imu_acceleration_scale);
+                                         config.imu_acceleration_scale, config.camera_enabled,
+                                         &config.camera);
         app_log_write(started ? APP_LOG_INFO : APP_LOG_ERROR, "DDS participant %s rc=%ld %s",
                       started ? "started" : "failed", (long)dds.last_result,
                       dds_runtime_error_text(&dds));
@@ -379,6 +401,10 @@ int main(void) {
         if (started && !dds.add_two_ints.running) {
             app_log_write(APP_LOG_WARN, "AddTwoInts service unavailable rc=%ld",
                           (long)dds.add_two_ints.last_result);
+        }
+        if (started && config.camera_enabled && dds.camera.writer <= DDS_ENTITY_NIL) {
+            app_log_write(APP_LOG_WARN, "Camera unavailable rc=%ld cam=0x%08lX",
+                          (long)dds.camera.last_result, (unsigned long)dds.camera.camera_result);
         }
     }
 
@@ -398,6 +424,8 @@ int main(void) {
     bool chatter_topic_enabled = true;
     bool imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
                              dds.imu.writer > DDS_ENTITY_NIL;
+    bool camera_topic_enabled = config.camera_enabled && dds.camera.writer > DDS_ENTITY_NIL;
+    bool camera_publish_once_pending = false;
     bool chatter_listening = true;
     u32 chatter_sequence = 0;
     char last_published_message[65] = "No local message yet";
@@ -407,6 +435,7 @@ int main(void) {
     u64 next_status_at = 0;
     u64 next_rtps_log_at = 0;
     u64 next_imu_at = osGetTime();
+    u64 next_camera_publish_at = osGetTime();
     const u64 imu_interval_ms = 1000 / config.imu_publish_hz;
     ddsrt_3ds_socket_stats_t socket_stats;
     memset(&socket_stats, 0, sizeof(socket_stats));
@@ -416,9 +445,15 @@ int main(void) {
         touchPosition touch;
         hidTouchRead(&touch);
         ui_action actions = app_ui_handle_input(keys_down, &touch);
+        if (actions != 0) {
+            app_log_write(APP_LOG_INFO, "UI actions: 0x%08lX", (unsigned long)actions);
+        }
         if (actions & UI_ACTION_EXIT) {
             app_log_write(APP_LOG_INFO, "Exit requested");
             break;
+        }
+        if (actions & UI_ACTION_TOGGLE_CAMERA_TOPIC) {
+            app_log_write(APP_LOG_INFO, "Camera toggle detected");
         }
 
         u64 now = osGetTime();
@@ -432,6 +467,21 @@ int main(void) {
             app_log_write(APP_LOG_INFO, "IMU publisher %s",
                           imu_topic_enabled ? "enabled" : "disabled");
         }
+        if (actions & UI_ACTION_TOGGLE_CAMERA_TOPIC) {
+            app_log_write(APP_LOG_INFO, "Camera toggle: calling dds_runtime_set_camera_enabled");
+            const bool requested = !camera_topic_enabled;
+            if (dds_runtime_set_camera_enabled(&dds, requested, &config.camera)) {
+                camera_topic_enabled = requested;
+                config.camera_enabled = requested;
+                app_log_write(APP_LOG_INFO, "Camera publisher %s",
+                              camera_topic_enabled ? "enabled" : "disabled");
+            } else {
+                app_log_write(APP_LOG_ERROR, "Camera %s failed dds=%ld cam=0x%08lX jpeg=%ld",
+                              requested ? "start" : "stop", (long)dds.camera.last_result,
+                              (unsigned long)dds.camera.camera_result,
+                              (long)dds.camera.jpeg_result);
+            }
+        }
         if (actions & UI_ACTION_PUBLISH_ONCE) {
             if (chatter_topic_enabled) {
                 publish_chatter(&dds, &chatter_sequence, last_published_message);
@@ -439,11 +489,15 @@ int main(void) {
             if (imu_topic_enabled && !dds_runtime_publish_imu(&dds, now)) {
                 app_log_write(APP_LOG_ERROR, "ROS IMU TX failed %s", dds_runtime_error_text(&dds));
             }
+            if (camera_topic_enabled) {
+                camera_publish_once_pending = true;
+            }
         }
         if (actions & UI_ACTION_TOGGLE_PUBLISHING) {
             chatter_publishing = !chatter_publishing;
             next_chatter_at = now;
             next_imu_at = now;
+            next_camera_publish_at = now;
             app_log_write(APP_LOG_INFO, "All topic publishing %s",
                           chatter_publishing ? "started" : "stopped");
         }
@@ -472,6 +526,18 @@ int main(void) {
             do {
                 next_imu_at += imu_interval_ms;
             } while (next_imu_at <= now);
+        }
+        if (camera_topic_enabled && dds.running) {
+            const uint64_t encoded_before = dds.camera.encoded;
+            const bool scheduled_camera_publish = chatter_publishing && now >= next_camera_publish_at;
+            const bool publish_camera = scheduled_camera_publish || camera_publish_once_pending;
+            (void)dds_runtime_poll_camera(&dds, now, publish_camera);
+            if (scheduled_camera_publish && dds.camera.encoded > encoded_before) {
+                next_camera_publish_at = now + CAMERA_PUBLISH_INTERVAL_MS;
+            }
+            if (camera_publish_once_pending && dds.camera.encoded > encoded_before) {
+                camera_publish_once_pending = false;
+            }
         }
         int32_t graph_matches = dds_runtime_graph_writer_matches(&dds);
         if (graph_matches != last_graph_matches) {
@@ -507,6 +573,11 @@ int main(void) {
         if (imu_matches != last_imu_matches) {
             app_log_write(APP_LOG_INFO, "ROS IMU writer match count=%ld", (long)imu_matches);
             last_imu_matches = imu_matches;
+        }
+        int32_t camera_matches = dds_runtime_camera_writer_matches(&dds);
+        if (camera_matches != last_camera_matches) {
+            app_log_write(APP_LOG_INFO, "ROS camera writer match count=%ld", (long)camera_matches);
+            last_camera_matches = camera_matches;
         }
         uint32_t writer_qos_policy = 0;
         int32_t writer_qos_rejections = dds_runtime_chatter_writer_incompatible_qos(
@@ -630,6 +701,7 @@ int main(void) {
             .publishing = chatter_publishing,
             .chatter_topic_enabled = chatter_topic_enabled,
             .imu_topic_enabled = imu_topic_enabled,
+            .camera_topic_enabled = camera_topic_enabled,
             .listening = chatter_listening,
             .log_has_error = app_log_has_error(),
             .probe_socket_ready = state.socket_fd >= 0,
@@ -668,6 +740,16 @@ int main(void) {
                 dds.imu.last_linear_acceleration[0], dds.imu.last_linear_acceleration[1],
                 dds.imu.last_linear_acceleration[2]
             },
+            .camera_available = dds.camera.writer > DDS_ENTITY_NIL,
+            .camera_captured = dds.camera.captured,
+            .camera_encoded = dds.camera.encoded,
+            .camera_published = dds.camera.published,
+            .camera_dropped = dds.camera.dropped,
+            .camera_jpeg_bytes = (uint32_t)dds.camera.jpeg_size,
+            .camera_preview = dds.camera.preview_buffer,
+            .camera_preview_width = dds.camera.width,
+            .camera_preview_height = dds.camera.height,
+            .camera_writer_matches = camera_matches,
             .add_two_ints_running = dds.add_two_ints.running,
             .add_two_ints_requests_handled = dds.add_two_ints.requests_handled,
             .add_two_ints_request_matches = service_request_matches,

@@ -1,0 +1,31 @@
+#include "../ros_imu/sensor_msgs_imu.idl"
+
+#include "../ros_imu/sensor_msgs_imu.idl"
+
+module sensor_msgs {
+  module msg {
+    module dds_ {
+      struct RegionOfInterest_ {
+        unsigned long x_offset;
+        unsigned long y_offset;
+        unsigned long height;
+        unsigned long width;
+        boolean do_rectify;
+      };
+
+      struct CameraInfo_ {
+        std_msgs::msg::dds_::Header_ header;
+        unsigned long height;
+        unsigned long width;
+        string distortion_model;
+        double D[5];
+        double K[9];
+        double R[9];
+        double P[12];
+        unsigned long binning_x;
+        unsigned long binning_y;
+        RegionOfInterest_ roi;
+      };
+    };
+  };
+};

@@ -165,9 +165,7 @@ void app_log_write(app_log_level level, const char *format, ...) {
     if (g_log.file != NULL) {
         fprintf(g_log.file, "[%010llu] %s %s\n", (unsigned long long)entry->timestamp_ms,
             app_log_level_name(level), entry->message);
-        if (level == APP_LOG_ERROR) {
-            fflush(g_log.file);
-        }
+        fflush(g_log.file);
     }
     if (level == APP_LOG_ERROR) {
         write_snapshot(entry);
