@@ -17,7 +17,8 @@ static void topic_row(ui_context *ui, const ui_snapshot *snapshot, size_t index,
     const bool selected = ui->selected_topic == index;
     const bool enabled = index == 0 ? snapshot->chatter_topic_enabled
                        : index == 1 ? snapshot->imu_topic_enabled
-                       : snapshot->camera_topic_enabled;
+                       : (index == 2 || index == 3) ? snapshot->camera_front_topic_enabled
+                       : snapshot->camera_back_topic_enabled;
     const bool available = index == 0 ? snapshot->dds_running
                          : index == 1 ? snapshot->imu_sensors_enabled
                          : snapshot->camera_available;
@@ -87,29 +88,37 @@ void ui_view_topics_bottom(ui_context *ui, const ui_snapshot *snapshot) {
         ui_textf(ui, 18, 164, 0.41f, ui->theme.success, "x %.3f   y %.3f   z %.3f",
                  snapshot->imu_linear_acceleration[0], snapshot->imu_linear_acceleration[1],
                  snapshot->imu_linear_acceleration[2]);
-    } else if (ui->selected_topic == 2 || ui->selected_topic == 3) {
+    } else if (ui->selected_topic >= 2 && ui->selected_topic <= 5) {
+        const bool is_front = (ui->selected_topic == 2 || ui->selected_topic == 3);
+        const char *cam_name = is_front ? "FRONT CAMERA" : "BACK CAMERA";
+        const uint64_t published = is_front ? snapshot->camera_front_published : snapshot->camera_back_published;
+        const uint64_t captured = is_front ? snapshot->camera_front_captured : snapshot->camera_back_captured;
+        const uint64_t encoded = is_front ? snapshot->camera_front_encoded : snapshot->camera_back_encoded;
+        const int32_t matches = is_front ? snapshot->camera_front_writer_matches : snapshot->camera_back_writer_matches;
+        const uint8_t *preview = is_front ? snapshot->camera_front_preview : snapshot->camera_back_preview;
+
         ui_panel(ui, 8, 62, 304, 34);
-        ui_textf(ui, 18, 72, 0.34f, ui->theme.muted, "JPEG CAMERA  %s  %u FPS",
+        ui_textf(ui, 18, 72, 0.34f, ui->theme.muted, "%s  %s  %u FPS",
+                 cam_name,
                  snapshot->camera_resolution == 0 ? "QQVGA" : "QVGA",
                  (unsigned int)snapshot->camera_fps);
         ui_textf(ui, 192, 72, 0.34f, ui->theme.accent, "Frames %llu",
-                 (unsigned long long)snapshot->camera_published);
+                 (unsigned long long)published);
         ui_panel(ui, 8, 104, 136, 108);
         ui_textf(ui, 18, 116, 0.32f, ui->theme.muted, "CAPTURED");
         ui_textf(ui, 18, 133, 0.42f, ui->theme.text, "%llu",
-                 (unsigned long long)snapshot->camera_captured,
-                 (unsigned long long)snapshot->camera_encoded);
+                 (unsigned long long)captured);
         ui_textf(ui, 18, 154, 0.32f, ui->theme.muted, "ENCODED");
         ui_textf(ui, 18, 171, 0.42f, ui->theme.text, "%llu",
-                 (unsigned long long)snapshot->camera_encoded);
+                 (unsigned long long)encoded);
         ui_textf(ui, 18, 192, 0.32f, ui->theme.success, "MATCH %ld",
-                 (long)snapshot->camera_writer_matches);
+                 (long)matches);
         ui_panel(ui, 152, 104, 160, 108);
         ui_text(ui, 160, 109, 0.28f, ui->theme.muted, "LIVE FEED");
-        if (snapshot->camera_preview != NULL && snapshot->camera_preview_width > 0 &&
+        if (preview != NULL && snapshot->camera_preview_width > 0 &&
             snapshot->camera_preview_height > 0) {
             ui_draw_image_preview(168.0f, 114.0f, 128.0f, 96.0f,
-                                  snapshot->camera_preview,
+                                  preview,
                                   snapshot->camera_preview_width,
                                   snapshot->camera_preview_height);
         }
@@ -118,7 +127,8 @@ void ui_view_topics_bottom(ui_context *ui, const ui_snapshot *snapshot) {
              app_ui_control_label(controls->previous_item), app_ui_control_label(controls->next_item));
     const bool enabled = ui->selected_topic == 0 ? snapshot->chatter_topic_enabled
                        : ui->selected_topic == 1 ? snapshot->imu_topic_enabled
-                       : snapshot->camera_topic_enabled;
+                       : (ui->selected_topic == 2 || ui->selected_topic == 3) ? snapshot->camera_front_topic_enabled
+                       : snapshot->camera_back_topic_enabled;
     ui_textf(ui, 8, 221, 0.29f, ui->theme.muted, "%s %s publisher  |  %s",
              app_ui_control_label(controls->activate), enabled ? "disable" : "enable", topic->qos);
 }

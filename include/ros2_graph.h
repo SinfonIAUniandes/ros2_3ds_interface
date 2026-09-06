@@ -22,7 +22,9 @@ void ros2_graph_set_namespace(ros2_graph *graph, const char *node_namespace);
 bool ros2_graph_start(ros2_graph *graph, dds_entity_t participant);
 bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
                         dds_entity_t chatter_writer, dds_entity_t chatter_reader,
-                        dds_entity_t imu_writer, dds_entity_t camera_writer,
+                        dds_entity_t imu_writer,
+                        dds_entity_t camera_front_writer,
+                        dds_entity_t camera_back_writer,
                         dds_entity_t service_request_reader,
                         dds_entity_t service_response_writer);
 int32_t ros2_graph_writer_matches(ros2_graph *graph);

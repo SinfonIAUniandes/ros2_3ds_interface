@@ -77,9 +77,10 @@ ros2 topic echo /nintendo_3ds/imu/data_raw sensor_msgs/msg/Imu
 ros2 topic hz /nintendo_3ds/imu/data_raw
 ```
 
-The optional JPEG camera stream publishes on `/nintendo_3ds/camera/image_raw/compressed`
-and `/nintendo_3ds/camera/camera_info`. Configure it on the SD card and view it
-with standard ROS image tools; see [Camera streaming](docs/features/camera-streaming.md).
+The optional JPEG camera streams publish on `/nintendo_3ds/camera/front/image_raw/compressed`,
+`/nintendo_3ds/camera/front/camera_info`, `/nintendo_3ds/camera/back/image_raw/compressed`,
+and `/nintendo_3ds/camera/back/camera_info`. Both are disabled by default. Configure them on the SD card
+and view them with standard ROS image tools; see [Camera streaming](docs/features/camera-streaming.md).
 
 To call the built-in service:
 
@@ -122,8 +123,9 @@ The same SD-card configuration selects the DDS domain with `domain_id` and the
 ROS graph namespace with `ros_namespace`. The built-in defaults are domain `0`
 and namespace `/nintendo_3ds`. The namespace prefixes every ROS endpoint, so
 the default topics include `/nintendo_3ds/chatter`,
-`/nintendo_3ds/imu/data_raw`, and
-`/nintendo_3ds/camera/image_raw/compressed`.
+`/nintendo_3ds/imu/data_raw`,
+`/nintendo_3ds/camera/front/image_raw/compressed`, and
+`/nintendo_3ds/camera/back/image_raw/compressed`.
 
 WSL2 in its default NAT mode is not expected to participate directly in LAN
 DDS discovery. Use native Windows ROS 2, mirrored networking, or a native Linux
@@ -155,7 +157,7 @@ Start with the [documentation index](docs/README.md).
 
 - Namespaced chatter publisher and subscriber using `std_msgs/msg/String`
 - Namespaced IMU publisher using `sensor_msgs/msg/Imu`
-- Namespaced JPEG camera and CameraInfo publishers using `sensor_msgs/msg/CompressedImage` and `sensor_msgs/msg/CameraInfo`
+- Namespaced dual JPEG camera and CameraInfo publishers (front and back) using `sensor_msgs/msg/CompressedImage` and `sensor_msgs/msg/CameraInfo`
 - Namespaced AddTwoInts server using `example_interfaces/srv/AddTwoInts`
 - ROS 2 graph publication for the 3DS node and endpoints
 - IPv4 UDP transport on the local network

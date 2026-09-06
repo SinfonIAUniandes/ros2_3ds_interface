@@ -108,7 +108,9 @@ ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch) {
         if (actions & UI_ACTION_ACTIVATE) {
             actions |= g_ui.selected_topic == 0 ? UI_ACTION_TOGGLE_CHATTER_TOPIC
                      : g_ui.selected_topic == 1 ? UI_ACTION_TOGGLE_IMU_TOPIC
-                                                 : UI_ACTION_TOGGLE_CAMERA_TOPIC;
+                     : (g_ui.selected_topic == 2 || g_ui.selected_topic == 3)
+                         ? UI_ACTION_TOGGLE_CAMERA_FRONT_TOPIC
+                         : UI_ACTION_TOGGLE_CAMERA_BACK_TOPIC;
         }
     } else if (g_ui.view == UI_VIEW_SETTINGS) {
         if (actions & UI_ACTION_NEXT_ITEM) g_ui.selected_settings_item =
@@ -197,13 +199,8 @@ bool app_ui_apply_camera_setting(int direction, ros2_camera_config *config) {
     }
     switch (g_ui.camera_setting_index) {
         case 0:
-            if (direction > 0) {
-                config->source = (config->source + 1u) % 3u;
-            } else if (config->source == 0u) {
-                config->source = ROS2_CAMERA_SOURCE_OUTER_RIGHT;
-            } else {
-                config->source--;
-            }
+            config->back_source = (config->back_source == ROS2_CAMERA_SOURCE_OUTER_LEFT)
+                ? ROS2_CAMERA_SOURCE_OUTER_RIGHT : ROS2_CAMERA_SOURCE_OUTER_LEFT;
             return true;
         case 1:
             if (direction > 0) {

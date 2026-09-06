@@ -35,7 +35,8 @@ void dds_runtime_init(dds_runtime *runtime);
 void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context);
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
                        const char *broadcast_ip, bool imu_enabled,
-                       double imu_acceleration_scale, bool camera_enabled,
+                       double imu_acceleration_scale, bool camera_front_enabled,
+                       bool camera_back_enabled,
                        const ros2_camera_config *camera_config,
                        const char *ros_namespace);
 void dds_runtime_stop(dds_runtime *runtime);
@@ -43,8 +44,8 @@ bool dds_runtime_publish_chatter(dds_runtime *runtime, const char *data);
 bool dds_runtime_refresh_graph(dds_runtime *runtime);
 bool dds_runtime_publish_imu(dds_runtime *runtime, uint64_t timestamp_ms);
 bool dds_runtime_poll_camera(dds_runtime *runtime, uint64_t timestamp_ms, bool publish);
-bool dds_runtime_set_camera_enabled(dds_runtime *runtime, bool enabled,
-                                    const ros2_camera_config *camera_config);
+bool dds_runtime_set_camera_front_enabled(dds_runtime *runtime, bool enabled);
+bool dds_runtime_set_camera_back_enabled(dds_runtime *runtime, bool enabled);
 int32_t dds_runtime_process_services(dds_runtime *runtime);
 int32_t dds_runtime_poll_chatter(dds_runtime *runtime, ros2_chatter_receive_fn callback, void *context);
 uint64_t dds_runtime_chatter_transmitted(const dds_runtime *runtime);
@@ -52,7 +53,8 @@ uint64_t dds_runtime_chatter_received(const dds_runtime *runtime);
 uint64_t dds_runtime_graph_published(const dds_runtime *runtime);
 uint64_t dds_runtime_imu_transmitted(const dds_runtime *runtime);
 int32_t dds_runtime_imu_writer_matches(dds_runtime *runtime);
-int32_t dds_runtime_camera_writer_matches(dds_runtime *runtime);
+int32_t dds_runtime_camera_front_writer_matches(dds_runtime *runtime);
+int32_t dds_runtime_camera_back_writer_matches(dds_runtime *runtime);
 int32_t dds_runtime_add_two_ints_request_matches(dds_runtime *runtime);
 int32_t dds_runtime_add_two_ints_response_matches(dds_runtime *runtime);
 int32_t dds_runtime_add_two_ints_request_incompatible_qos(dds_runtime *runtime,

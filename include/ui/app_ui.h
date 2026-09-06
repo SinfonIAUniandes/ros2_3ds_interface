@@ -34,11 +34,12 @@ typedef enum {
     UI_ACTION_BACK = 1u << 10,
     UI_ACTION_TOGGLE_CHATTER_TOPIC = 1u << 11,
     UI_ACTION_TOGGLE_IMU_TOPIC = 1u << 12,
-    UI_ACTION_TOGGLE_CAMERA_TOPIC = 1u << 13,
-    UI_ACTION_CAMERA_SETTING_NEXT = 1u << 14,
-    UI_ACTION_CAMERA_SETTING_PREVIOUS = 1u << 15,
-    UI_ACTION_EDIT_NAMESPACE = 1u << 16,
-    UI_ACTION_EDIT_DOMAIN_ID = 1u << 17
+    UI_ACTION_TOGGLE_CAMERA_FRONT_TOPIC = 1u << 13,
+    UI_ACTION_TOGGLE_CAMERA_BACK_TOPIC = 1u << 14,
+    UI_ACTION_CAMERA_SETTING_NEXT = 1u << 15,
+    UI_ACTION_CAMERA_SETTING_PREVIOUS = 1u << 16,
+    UI_ACTION_EDIT_NAMESPACE = 1u << 17,
+    UI_ACTION_EDIT_DOMAIN_ID = 1u << 18
 } ui_action;
 
 typedef struct {
@@ -82,7 +83,8 @@ typedef struct {
     bool publishing;
     bool chatter_topic_enabled;
     bool imu_topic_enabled;
-    bool camera_topic_enabled;
+    bool camera_front_topic_enabled;
+    bool camera_back_topic_enabled;
     bool listening;
     bool log_has_error;
     bool probe_socket_ready;
@@ -120,15 +122,22 @@ typedef struct {
     uint32_t camera_resolution;
     uint32_t camera_fps;
     uint32_t camera_quality;
-    uint64_t camera_captured;
-    uint64_t camera_encoded;
-    uint64_t camera_published;
-    uint64_t camera_dropped;
-    uint32_t camera_jpeg_bytes;
-    const uint8_t *camera_preview;
+    uint64_t camera_front_captured;
+    uint64_t camera_front_encoded;
+    uint64_t camera_front_published;
+    uint64_t camera_front_dropped;
+    uint32_t camera_front_jpeg_bytes;
+    const uint8_t *camera_front_preview;
+    int32_t camera_front_writer_matches;
+    uint64_t camera_back_captured;
+    uint64_t camera_back_encoded;
+    uint64_t camera_back_published;
+    uint64_t camera_back_dropped;
+    uint32_t camera_back_jpeg_bytes;
+    const uint8_t *camera_back_preview;
+    int32_t camera_back_writer_matches;
     uint32_t camera_preview_width;
     uint32_t camera_preview_height;
-    int32_t camera_writer_matches;
     bool add_two_ints_running;
     uint64_t add_two_ints_requests_handled;
     int32_t add_two_ints_request_matches;

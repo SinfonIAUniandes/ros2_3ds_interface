@@ -39,7 +39,8 @@ typedef struct {
     bool dds_enabled;
     bool peer_ip_invalid;
     bool imu_enabled;
-    bool camera_enabled;
+    bool camera_front_enabled;
+    bool camera_back_enabled;
     ros2_camera_config camera;
     u32 imu_publish_hz;
     double imu_acceleration_scale;
@@ -146,7 +147,8 @@ static void load_config_defaults(probe_config *config) {
     snprintf(config->ros_namespace, sizeof(config->ros_namespace), "/nintendo_3ds");
     config->dds_enabled = true;
     config->imu_enabled = true;
-    config->camera_enabled = false;
+    config->camera_front_enabled = false;
+    config->camera_back_enabled = false;
     ros2_camera_config_defaults(&config->camera);
     config->imu_publish_hz = DEFAULT_IMU_PUBLISH_HZ;
     config->imu_acceleration_scale = DEFAULT_IMU_ACCEL_SCALE;
@@ -206,12 +208,17 @@ static bool load_config_file(probe_config *config, const char *path) {
             config->dds_enabled = strtol(value, NULL, 10) != 0;
         } else if (strcmp(key, "imu_enabled") == 0) {
             config->imu_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "camera_front_enabled") == 0) {
+            config->camera_front_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "camera_back_enabled") == 0) {
+            config->camera_back_enabled = strtol(value, NULL, 10) != 0;
         } else if (strcmp(key, "camera_enabled") == 0) {
-            config->camera_enabled = strtol(value, NULL, 10) != 0;
+            bool en = strtol(value, NULL, 10) != 0;
+            config->camera_front_enabled = en;
+            config->camera_back_enabled = en;
         } else if (strcmp(key, "camera_source") == 0) {
-            if (strcmp(value, "inner") == 0) config->camera.source = ROS2_CAMERA_SOURCE_INNER;
-            else if (strcmp(value, "outer_left") == 0) config->camera.source = ROS2_CAMERA_SOURCE_OUTER_LEFT;
-            else if (strcmp(value, "outer_right") == 0) config->camera.source = ROS2_CAMERA_SOURCE_OUTER_RIGHT;
+            if (strcmp(value, "outer_left") == 0) config->camera.back_source = ROS2_CAMERA_SOURCE_OUTER_LEFT;
+            else if (strcmp(value, "outer_right") == 0) config->camera.back_source = ROS2_CAMERA_SOURCE_OUTER_RIGHT;
         } else if (strcmp(key, "camera_resolution") == 0) {
             if (strcmp(value, "qqvga") == 0) config->camera.resolution = ROS2_CAMERA_RESOLUTION_QQVGA;
             else if (strcmp(value, "qvga") == 0) config->camera.resolution = ROS2_CAMERA_RESOLUTION_QVGA;
@@ -437,7 +444,8 @@ int main(void) {
     int32_t last_writer_qos_rejections = -2;
     int32_t last_reader_qos_rejections = -2;
     int32_t last_imu_matches = -2;
-    int32_t last_camera_matches = -2;
+    int32_t last_camera_front_matches = -2;
+    int32_t last_camera_back_matches = -2;
     int32_t last_service_request_matches = -2;
     int32_t last_service_response_matches = -2;
     int32_t last_service_request_qos_rejections = -2;
@@ -454,7 +462,9 @@ int main(void) {
         app_log_write(APP_LOG_INFO, "DDS compatibility: Cyclone DDS defaults");
         bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                          broadcast_ip_text, config.imu_enabled,
-                                         config.imu_acceleration_scale, config.camera_enabled,
+                                         config.imu_acceleration_scale,
+                                         config.camera_front_enabled,
+                                         config.camera_back_enabled,
                                          &config.camera, config.ros_namespace);
         app_log_write(started ? APP_LOG_INFO : APP_LOG_ERROR, "DDS participant %s rc=%ld %s",
                       started ? "started" : "failed", (long)dds.last_result,
@@ -470,7 +480,8 @@ int main(void) {
             app_log_write(APP_LOG_WARN, "AddTwoInts service unavailable rc=%ld",
                           (long)dds.add_two_ints.last_result);
         }
-        if (started && config.camera_enabled && dds.camera.writer <= DDS_ENTITY_NIL) {
+        if (started && (config.camera_front_enabled || config.camera_back_enabled) &&
+            dds.camera.front.writer <= DDS_ENTITY_NIL && dds.camera.back.writer <= DDS_ENTITY_NIL) {
             app_log_write(APP_LOG_WARN, "Camera unavailable rc=%ld cam=0x%08lX",
                           (long)dds.camera.last_result, (unsigned long)dds.camera.camera_result);
         }
@@ -492,7 +503,8 @@ int main(void) {
     bool chatter_topic_enabled = true;
     bool imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
                              dds.imu.writer > DDS_ENTITY_NIL;
-    bool camera_topic_enabled = config.camera_enabled && dds.camera.writer > DDS_ENTITY_NIL;
+    bool camera_front_topic_enabled = config.camera_front_enabled && dds.camera.front.writer > DDS_ENTITY_NIL;
+    bool camera_back_topic_enabled = config.camera_back_enabled && dds.camera.back.writer > DDS_ENTITY_NIL;
     bool camera_publish_once_pending = false;
     bool chatter_listening = true;
     u32 chatter_sequence = 0;
@@ -520,7 +532,7 @@ int main(void) {
             app_log_write(APP_LOG_INFO, "Exit requested");
             break;
         }
-        if (actions & UI_ACTION_TOGGLE_CAMERA_TOPIC) {
+        if (actions & (UI_ACTION_TOGGLE_CAMERA_FRONT_TOPIC | UI_ACTION_TOGGLE_CAMERA_BACK_TOPIC)) {
             app_log_write(APP_LOG_INFO, "Camera toggle detected");
         }
 
@@ -537,13 +549,16 @@ int main(void) {
                 const bool restarted = network_ready && config.dds_enabled &&
                     dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                       broadcast_ip_text, config.imu_enabled,
-                                      config.imu_acceleration_scale, config.camera_enabled,
+                                      config.imu_acceleration_scale,
+                                      config.camera_front_enabled,
+                                      config.camera_back_enabled,
                                       &config.camera, config.ros_namespace);
                 chatter_publishing = false;
                 chatter_topic_enabled = true;
                 imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
                                     dds.imu.writer > DDS_ENTITY_NIL;
-                camera_topic_enabled = config.camera_enabled && dds.camera.writer > DDS_ENTITY_NIL;
+                camera_front_topic_enabled = config.camera_front_enabled && dds.camera.front.writer > DDS_ENTITY_NIL;
+                camera_back_topic_enabled = config.camera_back_enabled && dds.camera.back.writer > DDS_ENTITY_NIL;
                 camera_publish_once_pending = false;
                 next_chatter_at = now;
                 next_imu_at = now;
@@ -564,19 +579,24 @@ int main(void) {
             app_log_write(APP_LOG_INFO, "IMU publisher %s",
                           imu_topic_enabled ? "enabled" : "disabled");
         }
-        if (actions & UI_ACTION_TOGGLE_CAMERA_TOPIC) {
-            app_log_write(APP_LOG_INFO, "Camera toggle: calling dds_runtime_set_camera_enabled");
-            const bool requested = !camera_topic_enabled;
-            if (dds_runtime_set_camera_enabled(&dds, requested, &config.camera)) {
-                camera_topic_enabled = requested;
-                config.camera_enabled = requested;
-                app_log_write(APP_LOG_INFO, "Camera publisher %s",
-                              camera_topic_enabled ? "enabled" : "disabled");
-            } else {
-                app_log_write(APP_LOG_ERROR, "Camera %s failed dds=%ld cam=0x%08lX jpeg=%ld",
-                              requested ? "start" : "stop", (long)dds.camera.last_result,
-                              (unsigned long)dds.camera.camera_result,
-                              (long)dds.camera.jpeg_result);
+        if (actions & UI_ACTION_TOGGLE_CAMERA_FRONT_TOPIC) {
+            app_log_write(APP_LOG_INFO, "Front Camera toggle");
+            const bool requested = !camera_front_topic_enabled;
+            if (dds_runtime_set_camera_front_enabled(&dds, requested)) {
+                camera_front_topic_enabled = requested;
+                config.camera_front_enabled = requested;
+                app_log_write(APP_LOG_INFO, "Front camera publisher %s",
+                              camera_front_topic_enabled ? "enabled" : "disabled");
+            }
+        }
+        if (actions & UI_ACTION_TOGGLE_CAMERA_BACK_TOPIC) {
+            app_log_write(APP_LOG_INFO, "Back Camera toggle");
+            const bool requested = !camera_back_topic_enabled;
+            if (dds_runtime_set_camera_back_enabled(&dds, requested)) {
+                camera_back_topic_enabled = requested;
+                config.camera_back_enabled = requested;
+                app_log_write(APP_LOG_INFO, "Back camera publisher %s",
+                              camera_back_topic_enabled ? "enabled" : "disabled");
             }
         }
         if (actions & UI_ACTION_PUBLISH_ONCE) {
@@ -586,7 +606,7 @@ int main(void) {
             if (imu_topic_enabled && !dds_runtime_publish_imu(&dds, now)) {
                 app_log_write(APP_LOG_ERROR, "ROS IMU TX failed %s", dds_runtime_error_text(&dds));
             }
-            if (camera_topic_enabled) {
+            if (camera_front_topic_enabled || camera_back_topic_enabled) {
                 camera_publish_once_pending = true;
             }
         }
@@ -624,15 +644,16 @@ int main(void) {
                 next_imu_at += imu_interval_ms;
             } while (next_imu_at <= now);
         }
-        if (camera_topic_enabled && dds.running) {
-            const uint64_t encoded_before = dds.camera.encoded;
+        if ((camera_front_topic_enabled || camera_back_topic_enabled) && dds.running) {
+            const uint64_t encoded_before = dds.camera.front.encoded + dds.camera.back.encoded;
             const bool scheduled_camera_publish = chatter_publishing && now >= next_camera_publish_at;
             const bool publish_camera = scheduled_camera_publish || camera_publish_once_pending;
             (void)dds_runtime_poll_camera(&dds, now, publish_camera);
-            if (scheduled_camera_publish && dds.camera.encoded > encoded_before) {
+            const uint64_t encoded_after = dds.camera.front.encoded + dds.camera.back.encoded;
+            if (scheduled_camera_publish && encoded_after > encoded_before) {
                 next_camera_publish_at = now + CAMERA_PUBLISH_INTERVAL_MS;
             }
-            if (camera_publish_once_pending && dds.camera.encoded > encoded_before) {
+            if (camera_publish_once_pending && encoded_after > encoded_before) {
                 camera_publish_once_pending = false;
             }
         }
@@ -671,10 +692,15 @@ int main(void) {
             app_log_write(APP_LOG_INFO, "ROS IMU writer match count=%ld", (long)imu_matches);
             last_imu_matches = imu_matches;
         }
-        int32_t camera_matches = dds_runtime_camera_writer_matches(&dds);
-        if (camera_matches != last_camera_matches) {
-            app_log_write(APP_LOG_INFO, "ROS camera writer match count=%ld", (long)camera_matches);
-            last_camera_matches = camera_matches;
+        int32_t camera_front_matches = dds_runtime_camera_front_writer_matches(&dds);
+        if (camera_front_matches != last_camera_front_matches) {
+            app_log_write(APP_LOG_INFO, "ROS camera front writer match count=%ld", (long)camera_front_matches);
+            last_camera_front_matches = camera_front_matches;
+        }
+        int32_t camera_back_matches = dds_runtime_camera_back_writer_matches(&dds);
+        if (camera_back_matches != last_camera_back_matches) {
+            app_log_write(APP_LOG_INFO, "ROS camera back writer match count=%ld", (long)camera_back_matches);
+            last_camera_back_matches = camera_back_matches;
         }
         uint32_t writer_qos_policy = 0;
         int32_t writer_qos_rejections = dds_runtime_chatter_writer_incompatible_qos(
@@ -799,7 +825,8 @@ int main(void) {
             .publishing = chatter_publishing,
             .chatter_topic_enabled = chatter_topic_enabled,
             .imu_topic_enabled = imu_topic_enabled,
-            .camera_topic_enabled = camera_topic_enabled,
+            .camera_front_topic_enabled = camera_front_topic_enabled,
+            .camera_back_topic_enabled = camera_back_topic_enabled,
             .listening = chatter_listening,
             .log_has_error = app_log_has_error(),
             .probe_socket_ready = state.socket_fd >= 0,
@@ -838,16 +865,27 @@ int main(void) {
                 dds.imu.last_linear_acceleration[0], dds.imu.last_linear_acceleration[1],
                 dds.imu.last_linear_acceleration[2]
             },
-            .camera_available = dds.camera.writer > DDS_ENTITY_NIL,
-            .camera_captured = dds.camera.captured,
-            .camera_encoded = dds.camera.encoded,
-            .camera_published = dds.camera.published,
-            .camera_dropped = dds.camera.dropped,
-            .camera_jpeg_bytes = (uint32_t)dds.camera.jpeg_size,
-            .camera_preview = dds.camera.preview_buffer,
+            .camera_available = dds.camera.front.writer > DDS_ENTITY_NIL || dds.camera.back.writer > DDS_ENTITY_NIL,
+            .camera_source = (uint32_t)config.camera.back_source,
+            .camera_resolution = (uint32_t)config.camera.resolution,
+            .camera_fps = config.camera.fps,
+            .camera_quality = (uint32_t)config.camera.jpeg_quality,
+            .camera_front_captured = dds.camera.front.captured,
+            .camera_front_encoded = dds.camera.front.encoded,
+            .camera_front_published = dds.camera.front.published,
+            .camera_front_dropped = dds.camera.front.dropped,
+            .camera_front_jpeg_bytes = (uint32_t)dds.camera.front.jpeg_size,
+            .camera_front_preview = dds.camera.front.preview_buffer,
+            .camera_front_writer_matches = camera_front_matches,
+            .camera_back_captured = dds.camera.back.captured,
+            .camera_back_encoded = dds.camera.back.encoded,
+            .camera_back_published = dds.camera.back.published,
+            .camera_back_dropped = dds.camera.back.dropped,
+            .camera_back_jpeg_bytes = (uint32_t)dds.camera.back.jpeg_size,
+            .camera_back_preview = dds.camera.back.preview_buffer,
+            .camera_back_writer_matches = camera_back_matches,
             .camera_preview_width = dds.camera.width,
             .camera_preview_height = dds.camera.height,
-            .camera_writer_matches = camera_matches,
             .add_two_ints_running = dds.add_two_ints.running,
             .add_two_ints_requests_handled = dds.add_two_ints.requests_handled,
             .add_two_ints_request_matches = service_request_matches,

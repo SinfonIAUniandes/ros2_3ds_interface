@@ -79,7 +79,8 @@ void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context) {
 
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
                        const char *broadcast_ip, bool imu_enabled,
-                       double imu_acceleration_scale, bool camera_enabled,
+                       double imu_acceleration_scale, bool camera_front_enabled,
+                       bool camera_back_enabled,
                        const ros2_camera_config *camera_config,
                        const char *ros_namespace) {
     if (runtime->running) {
@@ -164,9 +165,8 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
     if (imu_enabled) {
         (void)ros2_imu_start(&runtime->imu, participant, imu_acceleration_scale, ros_namespace);
     }
-    if (camera_enabled) {
-        (void)ros2_camera_start(&runtime->camera, participant, camera_config, ros_namespace);
-    }
+    (void)ros2_camera_start(&runtime->camera, participant, camera_config, ros_namespace,
+                            camera_front_enabled, camera_back_enabled);
     (void)ros2_add_two_ints_start(&runtime->add_two_ints, participant, ros_namespace);
 
     if (!ros2_graph_start(&runtime->graph, participant)) {
@@ -178,7 +178,8 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
                             ros2_chatter_writer_entity(&runtime->chatter),
                             ros2_chatter_reader_entity(&runtime->chatter),
                             ros2_imu_writer_entity(&runtime->imu),
-                            ros2_camera_writer_entity(&runtime->camera),
+                            ros2_camera_front_writer_entity(&runtime->camera),
+                            ros2_camera_back_writer_entity(&runtime->camera),
                             runtime->add_two_ints.request_reader,
                             runtime->add_two_ints.response_writer)) {
         runtime->last_result = runtime->graph.last_result;
@@ -262,7 +263,8 @@ bool dds_runtime_refresh_graph(dds_runtime *runtime) {
                                         ros2_chatter_writer_entity(&runtime->chatter),
                                         ros2_chatter_reader_entity(&runtime->chatter),
                                         ros2_imu_writer_entity(&runtime->imu),
-                                        ros2_camera_writer_entity(&runtime->camera),
+                                        ros2_camera_front_writer_entity(&runtime->camera),
+                                        ros2_camera_back_writer_entity(&runtime->camera),
                                         runtime->add_two_ints.request_reader,
                                         runtime->add_two_ints.response_writer);
     runtime->last_result = runtime->graph.last_result;
@@ -280,7 +282,7 @@ bool dds_runtime_publish_imu(dds_runtime *runtime, uint64_t timestamp_ms) {
 }
 
 bool dds_runtime_poll_camera(dds_runtime *runtime, uint64_t timestamp_ms, bool publish) {
-    if (!runtime->running || runtime->camera.writer <= DDS_ENTITY_NIL) {
+    if (!runtime->running) {
         runtime->last_result = DDS_RETCODE_PRECONDITION_NOT_MET;
         return false;
     }
@@ -289,31 +291,22 @@ bool dds_runtime_poll_camera(dds_runtime *runtime, uint64_t timestamp_ms, bool p
     return processed;
 }
 
-bool dds_runtime_set_camera_enabled(dds_runtime *runtime, bool enabled,
-                                    const ros2_camera_config *camera_config) {
-    app_log_write(APP_LOG_INFO, "dds_runtime_set_camera_enabled: enabled=%d", enabled);
+bool dds_runtime_set_camera_front_enabled(dds_runtime *runtime, bool enabled) {
+    app_log_write(APP_LOG_INFO, "dds_runtime_set_camera_front_enabled: enabled=%d", enabled);
     if (!runtime->running || runtime->participant <= DDS_ENTITY_NIL) {
         runtime->last_result = DDS_RETCODE_PRECONDITION_NOT_MET;
         return false;
     }
-    if (enabled) {
-        app_log_write(APP_LOG_INFO, "CAM starting: enabling camera");
-        if (runtime->camera.writer > DDS_ENTITY_NIL) return true;
-        app_log_write(APP_LOG_INFO, "CAM calling ros2_camera_start");
-        if (!ros2_camera_start(&runtime->camera, runtime->participant, camera_config,
-                       runtime->ros_namespace)) {
-            runtime->last_result = runtime->camera.last_result;
-            return false;
-        }
-    } else {
-        if (runtime->camera.writer <= DDS_ENTITY_NIL) return true;
-        ros2_camera_stop(&runtime->camera);
-        if (runtime->camera.last_result != DDS_RETCODE_OK) {
-            runtime->last_result = runtime->camera.last_result;
-            return false;
-        }
+    return ros2_camera_set_front_enabled(&runtime->camera, enabled);
+}
+
+bool dds_runtime_set_camera_back_enabled(dds_runtime *runtime, bool enabled) {
+    app_log_write(APP_LOG_INFO, "dds_runtime_set_camera_back_enabled: enabled=%d", enabled);
+    if (!runtime->running || runtime->participant <= DDS_ENTITY_NIL) {
+        runtime->last_result = DDS_RETCODE_PRECONDITION_NOT_MET;
+        return false;
     }
-    return dds_runtime_refresh_graph(runtime);
+    return ros2_camera_set_back_enabled(&runtime->camera, enabled);
 }
 
 int32_t dds_runtime_process_services(dds_runtime *runtime) {
@@ -357,9 +350,16 @@ int32_t dds_runtime_imu_writer_matches(dds_runtime *runtime) {
     return matches;
 }
 
-int32_t dds_runtime_camera_writer_matches(dds_runtime *runtime) {
-    if (!runtime->running || runtime->camera.writer <= DDS_ENTITY_NIL) return 0;
-    int32_t matches = ros2_camera_writer_matches(&runtime->camera);
+int32_t dds_runtime_camera_front_writer_matches(dds_runtime *runtime) {
+    if (!runtime->running) return 0;
+    int32_t matches = ros2_camera_front_writer_matches(&runtime->camera);
+    if (matches < 0) runtime->last_result = runtime->camera.last_result;
+    return matches;
+}
+
+int32_t dds_runtime_camera_back_writer_matches(dds_runtime *runtime) {
+    if (!runtime->running) return 0;
+    int32_t matches = ros2_camera_back_writer_matches(&runtime->camera);
     if (matches < 0) runtime->last_result = runtime->camera.last_result;
     return matches;
 }
