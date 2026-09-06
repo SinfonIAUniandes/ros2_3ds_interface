@@ -7,12 +7,14 @@ the standard ROS 2 message `sensor_msgs/msg/Imu`.
 
 | Property | Value |
 | --- | --- |
-| ROS topic | `/imu/data_raw` |
-| DDS topic | `rt/imu/data_raw` |
+| ROS topic | `/nintendo_3ds/imu/data_raw` (default) |
+| DDS topic | `rt/nintendo_3ds/imu/data_raw` |
 | Type | `sensor_msgs/msg/Imu` |
 | Frame ID | `3ds_imu_link` |
 | QoS | Best effort, volatile, keep last 5 |
 | Default rate | 50 Hz |
+
+The topic is prefixed with the configured `ros_namespace` (`/nintendo_3ds` by default).
 
 The generated Cyclone DDS descriptor includes XTypes TypeInformation and
 TypeMapping for `Imu`, `Header`, `Time`, `Quaternion`, and `Vector3`.
@@ -84,9 +86,9 @@ On a ROS 2 host in the same domain:
 
 ```sh
 ros2 topic list -t
-ros2 topic info -v /imu/data_raw
-ros2 topic echo /imu/data_raw sensor_msgs/msg/Imu
-ros2 topic hz /imu/data_raw
+ros2 topic info -v /nintendo_3ds/imu/data_raw
+ros2 topic echo /nintendo_3ds/imu/data_raw sensor_msgs/msg/Imu
+ros2 topic hz /nintendo_3ds/imu/data_raw
 ```
 
 At rest, the magnitude of linear acceleration should be close to standard

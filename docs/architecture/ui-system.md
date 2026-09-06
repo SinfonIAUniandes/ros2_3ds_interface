@@ -14,7 +14,7 @@ the bottom screen provides navigation, controls, or deeper context.
 | Menu | Entry point for Details, Logs, and Settings |
 | Details | Network, discovery, RTPS, probe, QoS, and error diagnostics |
 | Logs | Recent structured events and the persistent SD log path |
-| Settings | Active button bindings and theme/control configuration paths |
+| Settings | Runtime ROS namespace and domain ID editing, and configuration file paths |
 
 The bottom navigation exposes the four primary tabs: Home, Topics, Services,
 and Menu. Use the configured previous/next tab buttons or touch a tab. Menu

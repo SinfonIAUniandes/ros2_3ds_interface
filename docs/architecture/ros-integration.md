@@ -9,10 +9,12 @@ creation.
 
 | ROS concept | DDS representation |
 | --- | --- |
-| Topic | `/chatter` |
-| DDS topic | `rt/chatter` |
+| Topic | `/nintendo_3ds/chatter` (default) |
+| DDS topic | `rt/nintendo_3ds/chatter` |
 | ROS type | `std_msgs/msg/String` |
 | DDS type | `std_msgs::msg::dds_::String_` |
+
+The topic is prefixed with the configured `ros_namespace` (`/nintendo_3ds` by default).
 
 The writer and reader use:
 
@@ -63,7 +65,8 @@ targets.
 ## Current Boundary
 
 The project currently provides one publisher and subscriber for chatter, a
-best-effort `sensor_msgs/msg/Imu` publisher, and an
+best-effort `sensor_msgs/msg/Imu` publisher, a `sensor_msgs/msg/CompressedImage`
+and `sensor_msgs/msg/CameraInfo` publisher, and an
 `example_interfaces/srv/AddTwoInts` server. Actions, parameters, lifecycle
-nodes, service clients, and the full `rcl` API are outside the implemented
+nodes, service clients, raw uncompressed images, and the full `rcl` API are outside the implemented
 runtime.

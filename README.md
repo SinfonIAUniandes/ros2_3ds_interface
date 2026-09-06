@@ -2,8 +2,8 @@
 
 A native ROS 2 publisher and subscriber for Nintendo 3DS homebrew. The app
 connects directly to DDS over Wi-Fi, publishes and receives
-`std_msgs/msg/String` on `/chatter`, streams `sensor_msgs/msg/Imu` on
-`/imu/data_raw`, and appears in the ROS 2 graph without an agent or bridge.
+`std_msgs/msg/String` on `/nintendo_3ds/chatter`, streams `sensor_msgs/msg/Imu` on
+`/nintendo_3ds/imu/data_raw`, and appears in the ROS 2 graph without an agent or bridge.
 
 The primary compatibility target is native Ubuntu with ROS 2 Jazzy and
 `rmw_cyclonedds_cpp`. Native Windows remains supported on a best-effort basis,
@@ -77,9 +77,9 @@ ros2 topic echo /nintendo_3ds/imu/data_raw sensor_msgs/msg/Imu
 ros2 topic hz /nintendo_3ds/imu/data_raw
 ```
 
-The optional JPEG camera stream publishes on `/camera/image_raw/compressed`.
-Configure it on the SD card and view it with standard ROS image tools; see
-[Camera streaming](docs/features/camera-streaming.md).
+The optional JPEG camera stream publishes on `/nintendo_3ds/camera/image_raw/compressed`
+and `/nintendo_3ds/camera/camera_info`. Configure it on the SD card and view it
+with standard ROS image tools; see [Camera streaming](docs/features/camera-streaming.md).
 
 To call the built-in service:
 
@@ -155,7 +155,7 @@ Start with the [documentation index](docs/README.md).
 
 - Namespaced chatter publisher and subscriber using `std_msgs/msg/String`
 - Namespaced IMU publisher using `sensor_msgs/msg/Imu`
-- Namespaced JPEG camera publisher using `sensor_msgs/msg/CompressedImage`
+- Namespaced JPEG camera and CameraInfo publishers using `sensor_msgs/msg/CompressedImage` and `sensor_msgs/msg/CameraInfo`
 - Namespaced AddTwoInts server using `example_interfaces/srv/AddTwoInts`
 - ROS 2 graph publication for the 3DS node and endpoints
 - IPv4 UDP transport on the local network

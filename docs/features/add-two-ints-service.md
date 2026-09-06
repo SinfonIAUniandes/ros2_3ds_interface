@@ -7,11 +7,13 @@ The application provides a ROS 2 server for the standard
 
 | Property | Value |
 | --- | --- |
-| ROS service | `/add_two_ints` |
+| ROS service | `/nintendo_3ds/add_two_ints` (default) |
 | Type | `example_interfaces/srv/AddTwoInts` |
 | Request | `int64 a`, `int64 b` |
 | Response | `int64 sum` |
 | QoS | Reliable, volatile, keep last 10 |
+
+The service is prefixed with the configured `ros_namespace` (`/nintendo_3ds` by default).
 
 The Services tab shows server state, matched request/reply endpoints, total
 requests handled, and the latest calculation.
@@ -28,8 +30,8 @@ ros2 pkg prefix rmw_cyclonedds_cpp
 ros2 daemon stop
 ros2 doctor --report | grep -Ei 'middleware|rmw'
 ros2 service list -t
-ros2 service type /add_two_ints
-ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
+ros2 service type /nintendo_3ds/add_two_ints
+ros2 service call /nintendo_3ds/add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
 ```
 
 If `ros2 service list` sees the server but a client reports it as unavailable,
@@ -69,7 +71,7 @@ Remove-Item Env:CYCLONEDDS_URI -ErrorAction SilentlyContinue
 ros2 pkg prefix rmw_cyclonedds_cpp
 ros2 daemon stop
 ros2 doctor --report | Select-String -Pattern "middleware|rmw"
-ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
+ros2 service call /nintendo_3ds/add_two_ints example_interfaces/srv/AddTwoInts "{a: 2, b: 3}"
 ```
 
 If `ros2 pkg prefix rmw_cyclonedds_cpp` fails, that environment does not contain
@@ -102,8 +104,10 @@ For compatibility with ROS 2 Jazzy `rmw_cyclonedds_cpp`, the server uses:
 
 | Direction | DDS topic | DDS type |
 | --- | --- | --- |
-| Request | `rq/add_two_intsRequest` | `example_interfaces::srv::dds_::AddTwoInts_Request_` |
-| Reply | `rr/add_two_intsReply` | `example_interfaces::srv::dds_::AddTwoInts_Response_` |
+| Request | `rq/nintendo_3ds/add_two_intsRequest` | `example_interfaces::srv::dds_::AddTwoInts_Request_` |
+| Reply | `rr/nintendo_3ds/add_two_intsReply` | `example_interfaces::srv::dds_::AddTwoInts_Response_` |
+
+With a custom `ros_namespace`, the DDS topics are `rq<namespace>/add_two_intsRequest` and `rr<namespace>/add_two_intsReply`.
 
 `rmw_cyclonedds_cpp` serializes a private 16-byte request header before the
 service body:

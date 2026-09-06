@@ -1,17 +1,20 @@
 # Camera Streaming
 
-The 3DS can publish JPEG-compressed camera frames on:
+The 3DS can publish JPEG-compressed camera frames and companion camera info on:
 
 | Property | Value |
 | --- | --- |
-| ROS topic | `/camera/image_raw/compressed` |
-| DDS topic | `rt/camera/image_raw/compressed` |
+| ROS topic | `/nintendo_3ds/camera/image_raw/compressed` (default) |
+| DDS topic | `rt/nintendo_3ds/camera/image_raw/compressed` |
 | Type | `sensor_msgs/msg/CompressedImage` |
 | QoS | Best effort, volatile, keep last 1 |
 | Format | `bgr8; jpeg compressed bgr8` |
+| CameraInfo topic | `/nintendo_3ds/camera/camera_info` (default) |
+| CameraInfo DDS topic | `rt/nintendo_3ds/camera/camera_info` |
+| CameraInfo type | `sensor_msgs/msg/CameraInfo` |
+| CameraInfo QoS | Best effort, volatile, keep last 1 |
 
-The `format` field follows the standard `compressed_image_transport` contract,
-so ROS tools can decode the JPEG stream directly.
+The topics are prefixed with the configured `ros_namespace` (`/nintendo_3ds` by default). The `format` field follows the standard `compressed_image_transport` contract, so ROS tools can decode the JPEG stream directly.
 
 ## Configuration
 
@@ -55,5 +58,4 @@ an initialized camera publisher.
 
 ## Limits
 
-This initial stream publishes compressed images only. It does not publish raw
-`sensor_msgs/msg/Image`, `CameraInfo`, calibration data, or stereo frames.
+The camera pipeline publishes JPEG-compressed frames and periodic `sensor_msgs/msg/CameraInfo` metadata (every 5 seconds). Camera publication is intentionally limited to approximately 1 FPS to protect Wi-Fi and socket stability, while local capture and bottom-screen preview continue at the configured frame rate. It does not publish raw `sensor_msgs/msg/Image`, true stereo calibration data, or synchronized stereo pairs.

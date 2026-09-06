@@ -10,9 +10,10 @@ hardware. It does not use Micro XRCE-DDS, an agent, `rcl`, or `rclc` at runtime.
 2. **Cyclone DDS 3DS port** provides DDS over the console's IPv4 UDP sockets.
 3. **DDS runtime wrapper** owns the domain and participant lifecycle and wires
    the reusable topic/service modules together.
-4. **ROS endpoints** publish `/chatter`, `/imu/data_raw`, optional
-   `/camera/image_raw/compressed`, `/add_two_ints` service traffic, and ROS
-   graph metadata using generated Cyclone DDS type descriptors.
+4. **ROS endpoints** publish namespaced topics (`/nintendo_3ds/chatter`,
+   `/nintendo_3ds/imu/data_raw`, optional `/nintendo_3ds/camera/image_raw/compressed`
+   and `/nintendo_3ds/camera/camera_info`), `/nintendo_3ds/add_two_ints` service
+   traffic, and ROS graph metadata using generated Cyclone DDS type descriptors.
 5. **Application loop** handles controls, periodic publishing, polling,
    diagnostics, and rendering.
 
@@ -41,12 +42,15 @@ flowchart TB
 | --- | --- |
 | `source/main.c` | 3DS lifecycle, input, network setup, UI, and scheduling |
 | `source/dds_runtime.c` | DDS domain and participant lifecycle plus feature wiring |
+| `source/ros2_common.c` | Shared DDS QoS and endpoint helpers |
+| `source/ros2_names.c` | Namespace-aware `rt`, `rq`, and `rr` DDS names |
 | `source/ros2_chatter.c` | `/chatter` topic, writer, reader, QoS, and samples |
 | `source/ros2_imu.c` | IMU publisher lifecycle, HID polling, and sample conversion |
 | `source/ros2_camera.c` | JPEG camera stream and camera-info publication |
 | `source/ros2_add_two_ints.c` | `AddTwoInts` request/response service implementation |
 | `source/ros2_graph.c` | `ros_discovery_info` publication |
-| `source/ros2_common.c` | Shared DDS QoS and endpoint helpers |
+| `source/logging/app_log.c` | Circular event logs, SD session logs, and error snapshots |
+| `source/ui/` | Citro2D immediate-mode user interface and views |
 | `include/ros2_types.h` | Stable compatibility layer over generated DDS messages |
 | `generated/` | Generated Cyclone DDS descriptors for ROS types and service payloads |
 | `romfs/config.ini` | Built-in runtime defaults |
