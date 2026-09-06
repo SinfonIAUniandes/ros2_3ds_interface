@@ -39,7 +39,8 @@ typedef enum {
     UI_ACTION_CAMERA_SETTING_NEXT = 1u << 15,
     UI_ACTION_CAMERA_SETTING_PREVIOUS = 1u << 16,
     UI_ACTION_EDIT_NAMESPACE = 1u << 17,
-    UI_ACTION_EDIT_DOMAIN_ID = 1u << 18
+    UI_ACTION_EDIT_DOMAIN_ID = 1u << 18,
+    UI_ACTION_TOGGLE_JOY_TOPIC = 1u << 19
 } ui_action;
 
 typedef struct {
@@ -83,6 +84,7 @@ typedef struct {
     bool publishing;
     bool chatter_topic_enabled;
     bool imu_topic_enabled;
+    bool joy_topic_enabled;
     bool camera_front_topic_enabled;
     bool camera_back_topic_enabled;
     bool listening;
@@ -138,6 +140,11 @@ typedef struct {
     int32_t camera_back_writer_matches;
     uint32_t camera_preview_width;
     uint32_t camera_preview_height;
+    uint32_t joy_publish_hz;
+    uint64_t joy_transmitted;
+    int32_t joy_writer_matches;
+    float joy_axes[8];
+    int32_t joy_buttons[15];
     bool add_two_ints_running;
     uint64_t add_two_ints_requests_handled;
     int32_t add_two_ints_request_matches;

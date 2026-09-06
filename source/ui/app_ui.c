@@ -110,7 +110,9 @@ ui_action app_ui_handle_input(u32 keys_down, const touchPosition *touch) {
                      : g_ui.selected_topic == 1 ? UI_ACTION_TOGGLE_IMU_TOPIC
                      : (g_ui.selected_topic == 2 || g_ui.selected_topic == 3)
                          ? UI_ACTION_TOGGLE_CAMERA_FRONT_TOPIC
-                         : UI_ACTION_TOGGLE_CAMERA_BACK_TOPIC;
+                     : (g_ui.selected_topic == 4 || g_ui.selected_topic == 5)
+                         ? UI_ACTION_TOGGLE_CAMERA_BACK_TOPIC
+                         : UI_ACTION_TOGGLE_JOY_TOPIC;
         }
     } else if (g_ui.view == UI_VIEW_SETTINGS) {
         if (actions & UI_ACTION_NEXT_ITEM) g_ui.selected_settings_item =

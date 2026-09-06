@@ -18,10 +18,12 @@ static void topic_row(ui_context *ui, const ui_snapshot *snapshot, size_t index,
     const bool enabled = index == 0 ? snapshot->chatter_topic_enabled
                        : index == 1 ? snapshot->imu_topic_enabled
                        : (index == 2 || index == 3) ? snapshot->camera_front_topic_enabled
-                       : snapshot->camera_back_topic_enabled;
+                       : (index == 4 || index == 5) ? snapshot->camera_back_topic_enabled
+                       : snapshot->joy_topic_enabled;
     const bool available = index == 0 ? snapshot->dds_running
                          : index == 1 ? snapshot->imu_sensors_enabled
-                         : snapshot->camera_available;
+                         : (index >= 2 && index <= 5) ? snapshot->camera_available
+                         : snapshot->dds_running;
     const bool active = enabled && available;
     ui_rect(8, y, 384, 43, selected ? ui->theme.selected : ui->theme.surface);
     ui_rect(8, y, 5, 43, selected ? ui->theme.accent : (active ? ui->theme.success : ui->theme.danger));
@@ -122,13 +124,48 @@ void ui_view_topics_bottom(ui_context *ui, const ui_snapshot *snapshot) {
                                   snapshot->camera_preview_width,
                                   snapshot->camera_preview_height);
         }
+    } else if (ui->selected_topic == 6) {
+        ui_panel(ui, 8, 62, 304, 34);
+        ui_textf(ui, 18, 72, 0.34f, ui->theme.muted, "JOYSTICK  %lu Hz",
+                 (unsigned long)snapshot->joy_publish_hz);
+        ui_textf(ui, 160, 72, 0.34f, ui->theme.accent, "TX %llu  MATCH %ld",
+                 (unsigned long long)snapshot->joy_transmitted,
+                 (long)snapshot->joy_writer_matches);
+
+        ui_panel(ui, 8, 102, 304, 52);
+        ui_textf(ui, 18, 108, 0.30f, ui->theme.muted,
+                 "CPAD: X %+.2f  Y %+.2f   CSTICK: X %+.2f  Y %+.2f",
+                 snapshot->joy_axes[0], snapshot->joy_axes[1],
+                 snapshot->joy_axes[2], snapshot->joy_axes[3]);
+        ui_textf(ui, 18, 128, 0.30f, ui->theme.muted,
+                 "DPAD: X %+.0f  Y %+.0f   TOUCH: X %+.2f  Y %+.2f",
+                 snapshot->joy_axes[4], snapshot->joy_axes[5],
+                 snapshot->joy_axes[6], snapshot->joy_axes[7]);
+
+        ui_panel(ui, 8, 160, 304, 48);
+        ui_text(ui, 18, 166, 0.30f, ui->theme.muted, "ACTIVE BUTTONS:");
+        char btn_str[128] = { 0 };
+        size_t offset = 0;
+        static const char *btn_names[] = {
+            "A", "B", "X", "Y", "L", "R", "ZL", "ZR", "Sel", "Start", "Touch", "D-Up", "D-Dn", "D-Lt", "D-Rt"
+        };
+        for (int i = 0; i < 15; i++) {
+            if (snapshot->joy_buttons[i]) {
+                offset += snprintf(btn_str + offset, sizeof(btn_str) - offset, "[%s] ", btn_names[i]);
+            }
+        }
+        if (offset == 0) {
+            snprintf(btn_str, sizeof(btn_str), "(none)");
+        }
+        ui_textf(ui, 18, 184, 0.34f, ui->theme.success, "%s", btn_str);
     }
     ui_textf(ui, 8, 220, 0.31f, ui->theme.muted, "%s/%s select topic",
              app_ui_control_label(controls->previous_item), app_ui_control_label(controls->next_item));
     const bool enabled = ui->selected_topic == 0 ? snapshot->chatter_topic_enabled
                        : ui->selected_topic == 1 ? snapshot->imu_topic_enabled
                        : (ui->selected_topic == 2 || ui->selected_topic == 3) ? snapshot->camera_front_topic_enabled
-                       : snapshot->camera_back_topic_enabled;
+                       : (ui->selected_topic == 4 || ui->selected_topic == 5) ? snapshot->camera_back_topic_enabled
+                       : snapshot->joy_topic_enabled;
     ui_textf(ui, 8, 221, 0.29f, ui->theme.muted, "%s %s publisher  |  %s",
              app_ui_control_label(controls->activate), enabled ? "disable" : "enable", topic->qos);
 }

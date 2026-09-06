@@ -13,6 +13,7 @@
 #include "ros2_imu.h"
 #include "ros2_add_two_ints.h"
 #include "ros2_camera.h"
+#include "ros2_joy.h"
 
 typedef void (*dds_runtime_log_fn)(void *context, int level, const char *message);
 
@@ -27,6 +28,7 @@ typedef struct {
     ros2_chatter chatter;
     ros2_graph graph;
     ros2_imu imu;
+    ros2_joy joy;
     ros2_add_two_ints add_two_ints;
     ros2_camera camera;
 } dds_runtime;
@@ -35,7 +37,8 @@ void dds_runtime_init(dds_runtime *runtime);
 void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context);
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
                        const char *broadcast_ip, bool imu_enabled,
-                       double imu_acceleration_scale, bool camera_front_enabled,
+                       double imu_acceleration_scale, bool joy_enabled,
+                       bool camera_front_enabled,
                        bool camera_back_enabled,
                        const ros2_camera_config *camera_config,
                        const char *ros_namespace);
@@ -43,6 +46,13 @@ void dds_runtime_stop(dds_runtime *runtime);
 bool dds_runtime_publish_chatter(dds_runtime *runtime, const char *data);
 bool dds_runtime_refresh_graph(dds_runtime *runtime);
 bool dds_runtime_publish_imu(dds_runtime *runtime, uint64_t timestamp_ms);
+bool dds_runtime_publish_joy(dds_runtime *runtime, uint64_t timestamp_ms,
+                             const circlePosition *circle,
+                             const circlePosition *cstick,
+                             u32 keys_held,
+                             const touchPosition *touch,
+                             bool is_touching);
+bool dds_runtime_set_joy_enabled(dds_runtime *runtime, bool enabled);
 bool dds_runtime_poll_camera(dds_runtime *runtime, uint64_t timestamp_ms, bool publish);
 bool dds_runtime_set_camera_front_enabled(dds_runtime *runtime, bool enabled);
 bool dds_runtime_set_camera_back_enabled(dds_runtime *runtime, bool enabled);
@@ -53,6 +63,8 @@ uint64_t dds_runtime_chatter_received(const dds_runtime *runtime);
 uint64_t dds_runtime_graph_published(const dds_runtime *runtime);
 uint64_t dds_runtime_imu_transmitted(const dds_runtime *runtime);
 int32_t dds_runtime_imu_writer_matches(dds_runtime *runtime);
+uint64_t dds_runtime_joy_transmitted(const dds_runtime *runtime);
+int32_t dds_runtime_joy_writer_matches(dds_runtime *runtime);
 int32_t dds_runtime_camera_front_writer_matches(dds_runtime *runtime);
 int32_t dds_runtime_camera_back_writer_matches(dds_runtime *runtime);
 int32_t dds_runtime_add_two_ints_request_matches(dds_runtime *runtime);

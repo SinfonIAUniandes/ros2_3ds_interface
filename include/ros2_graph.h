@@ -23,6 +23,7 @@ bool ros2_graph_start(ros2_graph *graph, dds_entity_t participant);
 bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
                         dds_entity_t chatter_writer, dds_entity_t chatter_reader,
                         dds_entity_t imu_writer,
+                        dds_entity_t joy_writer,
                         dds_entity_t camera_front_writer,
                         dds_entity_t camera_back_writer,
                         dds_entity_t service_request_reader,

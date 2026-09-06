@@ -59,6 +59,7 @@ fail:
 bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
                         dds_entity_t chatter_writer, dds_entity_t chatter_reader,
                         dds_entity_t imu_writer,
+                        dds_entity_t joy_writer,
                         dds_entity_t camera_front_writer,
                         dds_entity_t camera_back_writer,
                         dds_entity_t service_request_reader,
@@ -67,6 +68,7 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
     dds_guid_t writer_guid;
     dds_guid_t reader_guid;
     dds_guid_t imu_writer_guid;
+    dds_guid_t joy_writer_guid;
     dds_guid_t camera_front_writer_guid;
     dds_guid_t camera_back_writer_guid;
     dds_guid_t service_request_reader_guid;
@@ -88,6 +90,11 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
         graph->last_result = dds_get_guid(imu_writer, &imu_writer_guid);
         if (graph->last_result != DDS_RETCODE_OK) return false;
     }
+    bool has_joy_writer = joy_writer > DDS_ENTITY_NIL;
+    if (has_joy_writer) {
+        graph->last_result = dds_get_guid(joy_writer, &joy_writer_guid);
+        if (graph->last_result != DDS_RETCODE_OK) return false;
+    }
     bool has_camera_front_writer = camera_front_writer > DDS_ENTITY_NIL;
     if (has_camera_front_writer) {
         graph->last_result = dds_get_guid(camera_front_writer, &camera_front_writer_guid);
@@ -107,7 +114,7 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
         if (graph->last_result != DDS_RETCODE_OK) return false;
     }
 
-    rmw_dds_common_msg_dds__Gid_ writer_gids[5] = { { { 0 } }, { { 0 } }, { { 0 } }, { { 0 } }, { { 0 } } };
+    rmw_dds_common_msg_dds__Gid_ writer_gids[6] = { { { 0 } }, { { 0 } }, { { 0 } }, { { 0 } }, { { 0 } }, { { 0 } } };
     rmw_dds_common_msg_dds__Gid_ reader_gids[2] = { { { 0 } }, { { 0 } } };
     rmw_dds_common_msg_dds__NodeEntitiesInfo_ node = { 0 };
     rmw_dds_common_msg_dds__ParticipantEntitiesInfo_ sample = { 0 };
@@ -117,6 +124,9 @@ bool ros2_graph_publish(ros2_graph *graph, dds_entity_t participant,
     memcpy(writer_gids[writer_count++].data, writer_guid.v, sizeof(writer_gids[0].data));
     if (has_imu_writer) {
         memcpy(writer_gids[writer_count++].data, imu_writer_guid.v, sizeof(writer_gids[0].data));
+    }
+    if (has_joy_writer) {
+        memcpy(writer_gids[writer_count++].data, joy_writer_guid.v, sizeof(writer_gids[0].data));
     }
     if (has_camera_front_writer) {
         memcpy(writer_gids[writer_count++].data, camera_front_writer_guid.v, sizeof(writer_gids[0].data));

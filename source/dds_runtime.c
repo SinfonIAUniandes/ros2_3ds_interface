@@ -43,6 +43,7 @@ void dds_runtime_init(dds_runtime *runtime) {
     ros2_chatter_init(&runtime->chatter);
     ros2_graph_init(&runtime->graph);
     ros2_imu_init(&runtime->imu);
+    ros2_joy_init(&runtime->joy);
     ros2_add_two_ints_init(&runtime->add_two_ints);
     ros2_camera_init(&runtime->camera);
 
@@ -79,7 +80,8 @@ void dds_runtime_set_log_sink(dds_runtime_log_fn callback, void *context) {
 
 bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *peer_ip,
                        const char *broadcast_ip, bool imu_enabled,
-                       double imu_acceleration_scale, bool camera_front_enabled,
+                       double imu_acceleration_scale, bool joy_enabled,
+                       bool camera_front_enabled,
                        bool camera_back_enabled,
                        const ros2_camera_config *camera_config,
                        const char *ros_namespace) {
@@ -165,6 +167,9 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
     if (imu_enabled) {
         (void)ros2_imu_start(&runtime->imu, participant, imu_acceleration_scale, ros_namespace);
     }
+    if (joy_enabled) {
+        (void)ros2_joy_start(&runtime->joy, participant, ros_namespace);
+    }
     (void)ros2_camera_start(&runtime->camera, participant, camera_config, ros_namespace,
                             camera_front_enabled, camera_back_enabled);
     (void)ros2_add_two_ints_start(&runtime->add_two_ints, participant, ros_namespace);
@@ -178,6 +183,7 @@ bool dds_runtime_start(dds_runtime *runtime, uint32_t domain_id, const char *pee
                             ros2_chatter_writer_entity(&runtime->chatter),
                             ros2_chatter_reader_entity(&runtime->chatter),
                             ros2_imu_writer_entity(&runtime->imu),
+                            ros2_joy_writer_entity(&runtime->joy),
                             ros2_camera_front_writer_entity(&runtime->camera),
                             ros2_camera_back_writer_entity(&runtime->camera),
                             runtime->add_two_ints.request_reader,
@@ -194,6 +200,7 @@ fail:
     ros2_graph_stop(&runtime->graph);
     ros2_add_two_ints_stop(&runtime->add_two_ints);
     ros2_camera_stop(&runtime->camera);
+    ros2_joy_stop(&runtime->joy);
     ros2_imu_stop(&runtime->imu);
     ros2_chatter_stop(&runtime->chatter);
     if (participant >= 0) {
@@ -213,6 +220,7 @@ void dds_runtime_stop(dds_runtime *runtime) {
         ros2_graph_stop(&runtime->graph);
         ros2_add_two_ints_stop(&runtime->add_two_ints);
         ros2_camera_stop(&runtime->camera);
+        ros2_joy_stop(&runtime->joy);
         ros2_imu_stop(&runtime->imu);
         ros2_chatter_stop(&runtime->chatter);
     }
@@ -263,6 +271,7 @@ bool dds_runtime_refresh_graph(dds_runtime *runtime) {
                                         ros2_chatter_writer_entity(&runtime->chatter),
                                         ros2_chatter_reader_entity(&runtime->chatter),
                                         ros2_imu_writer_entity(&runtime->imu),
+                                        ros2_joy_writer_entity(&runtime->joy),
                                         ros2_camera_front_writer_entity(&runtime->camera),
                                         ros2_camera_back_writer_entity(&runtime->camera),
                                         runtime->add_two_ints.request_reader,
@@ -279,6 +288,36 @@ bool dds_runtime_publish_imu(dds_runtime *runtime, uint64_t timestamp_ms) {
     bool published = ros2_imu_publish(&runtime->imu, timestamp_ms);
     runtime->last_result = runtime->imu.last_result;
     return published;
+}
+
+bool dds_runtime_publish_joy(dds_runtime *runtime, uint64_t timestamp_ms,
+                             const circlePosition *circle,
+                             const circlePosition *cstick,
+                             u32 keys_held,
+                             const touchPosition *touch,
+                             bool is_touching) {
+    if (!runtime->running) {
+        runtime->last_result = DDS_RETCODE_PRECONDITION_NOT_MET;
+        return false;
+    }
+    bool published = ros2_joy_publish(&runtime->joy, timestamp_ms,
+                                      circle, cstick, keys_held, touch, is_touching);
+    runtime->last_result = runtime->joy.last_result;
+    return published;
+}
+
+bool dds_runtime_set_joy_enabled(dds_runtime *runtime, bool enabled) {
+    if (!runtime->running) return false;
+    if (enabled) {
+        if (runtime->joy.writer > DDS_ENTITY_NIL) {
+            runtime->joy.enabled = true;
+            return true;
+        }
+        return ros2_joy_start(&runtime->joy, runtime->participant, runtime->ros_namespace);
+    } else {
+        ros2_joy_stop(&runtime->joy);
+        return true;
+    }
 }
 
 bool dds_runtime_poll_camera(dds_runtime *runtime, uint64_t timestamp_ms, bool publish) {
@@ -347,6 +386,17 @@ int32_t dds_runtime_imu_writer_matches(dds_runtime *runtime) {
     if (!runtime->running || runtime->imu.writer <= DDS_ENTITY_NIL) return 0;
     int32_t matches = ros2_imu_writer_matches(&runtime->imu);
     if (matches < 0) runtime->last_result = runtime->imu.last_result;
+    return matches;
+}
+
+uint64_t dds_runtime_joy_transmitted(const dds_runtime *runtime) {
+    return runtime->joy.transmitted;
+}
+
+int32_t dds_runtime_joy_writer_matches(dds_runtime *runtime) {
+    if (!runtime->running || runtime->joy.writer <= DDS_ENTITY_NIL) return 0;
+    int32_t matches = ros2_joy_writer_matches((ros2_joy *)&runtime->joy);
+    if (matches < 0) runtime->last_result = runtime->joy.last_result;
     return matches;
 }
 

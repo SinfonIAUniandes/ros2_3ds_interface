@@ -23,6 +23,8 @@ not require rebuilding the application.
 | `imu_enabled` | `1` | Enables the motion sensors and IMU writer |
 | `imu_publish_hz` | `50` | IMU publication rate, from 1 through 100 Hz |
 | `imu_accel_mps2_per_count` | `0.01915361328125` | Accelerometer calibration scale |
+| `joy_enabled` | `1` | Enables joystick streaming (`sensor_msgs/msg/Joy`) |
+| `joy_publish_hz` | `20` | Joystick publication rate, from 1 through 100 Hz |
 | `camera_front_enabled` | `0` | Enables front (inner) JPEG camera stream |
 | `camera_back_enabled` | `0` | Enables back (outer) JPEG camera stream |
 | `camera_source` | `outer_left` | Back camera sensor: `outer_left` or `outer_right` |

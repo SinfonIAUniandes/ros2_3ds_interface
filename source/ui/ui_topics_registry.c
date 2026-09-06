@@ -7,7 +7,8 @@ const ui_topic_definition ui_topics[] = {
     { "/camera/front/image_raw/compressed", "sensor_msgs/msg/CompressedImage", "Best effort | Volatile | Keep last 1" },
     { "/camera/front/camera_info", "sensor_msgs/msg/CameraInfo", "Best effort | Volatile | Keep last 1" },
     { "/camera/back/image_raw/compressed", "sensor_msgs/msg/CompressedImage", "Best effort | Volatile | Keep last 1" },
-    { "/camera/back/camera_info", "sensor_msgs/msg/CameraInfo", "Best effort | Volatile | Keep last 1" }
+    { "/camera/back/camera_info", "sensor_msgs/msg/CameraInfo", "Best effort | Volatile | Keep last 1" },
+    { "/joy", "sensor_msgs/msg/Joy", "Best effort | Volatile | Keep last 1" }
 };
 
 const size_t ui_topic_count = sizeof(ui_topics) / sizeof(ui_topics[0]);

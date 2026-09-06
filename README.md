@@ -77,6 +77,15 @@ ros2 topic echo /nintendo_3ds/imu/data_raw sensor_msgs/msg/Imu
 ros2 topic hz /nintendo_3ds/imu/data_raw
 ```
 
+To stream joystick, button, and touch inputs (`sensor_msgs/msg/Joy`):
+
+```sh
+ros2 topic echo /nintendo_3ds/joy
+ros2 topic hz /nintendo_3ds/joy
+```
+
+See [Joystick streaming](docs/features/joystick-streaming.md) for full axis/button mappings and `teleop_twist_joy` examples.
+
 The optional JPEG camera streams publish on `/nintendo_3ds/camera/front/image_raw/compressed`,
 `/nintendo_3ds/camera/front/camera_info`, `/nintendo_3ds/camera/back/image_raw/compressed`,
 and `/nintendo_3ds/camera/back/camera_info`. Both are disabled by default. Configure them on the SD card
@@ -124,6 +133,7 @@ ROS graph namespace with `ros_namespace`. The built-in defaults are domain `0`
 and namespace `/nintendo_3ds`. The namespace prefixes every ROS endpoint, so
 the default topics include `/nintendo_3ds/chatter`,
 `/nintendo_3ds/imu/data_raw`,
+`/nintendo_3ds/joy`,
 `/nintendo_3ds/camera/front/image_raw/compressed`, and
 `/nintendo_3ds/camera/back/image_raw/compressed`.
 

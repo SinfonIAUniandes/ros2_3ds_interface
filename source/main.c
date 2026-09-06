@@ -1,4 +1,5 @@
 #include <3ds.h>
+#include <3ds/services/irrst.h>
 
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -29,6 +30,7 @@
 #define APP_BUILD_ID "20260817-camera-trace"
 #define DEFAULT_IMU_PUBLISH_HZ 50
 #define DEFAULT_IMU_ACCEL_SCALE (9.80665 / 512.0)
+#define DEFAULT_JOY_PUBLISH_HZ 20
 
 typedef struct {
     char peer_ip[INET_ADDRSTRLEN];
@@ -39,11 +41,13 @@ typedef struct {
     bool dds_enabled;
     bool peer_ip_invalid;
     bool imu_enabled;
+    bool joy_enabled;
     bool camera_front_enabled;
     bool camera_back_enabled;
     ros2_camera_config camera;
     u32 imu_publish_hz;
     double imu_acceleration_scale;
+    u32 joy_publish_hz;
 } probe_config;
 
 typedef struct {
@@ -152,6 +156,8 @@ static void load_config_defaults(probe_config *config) {
     ros2_camera_config_defaults(&config->camera);
     config->imu_publish_hz = DEFAULT_IMU_PUBLISH_HZ;
     config->imu_acceleration_scale = DEFAULT_IMU_ACCEL_SCALE;
+    config->joy_enabled = true;
+    config->joy_publish_hz = DEFAULT_JOY_PUBLISH_HZ;
 }
 
 static bool load_config_file(probe_config *config, const char *path) {
@@ -237,6 +243,13 @@ static bool load_config_file(probe_config *config, const char *path) {
             double scale = strtod(value, NULL);
             if (scale > 0.0 && scale < 1.0) {
                 config->imu_acceleration_scale = scale;
+            }
+        } else if (strcmp(key, "joy_enabled") == 0) {
+            config->joy_enabled = strtol(value, NULL, 10) != 0;
+        } else if (strcmp(key, "joy_publish_hz") == 0) {
+            long publish_hz = strtol(value, NULL, 10);
+            if (publish_hz >= 1 && publish_hz <= 100) {
+                config->joy_publish_hz = (u32)publish_hz;
             }
         }
     }
@@ -435,6 +448,18 @@ int main(void) {
         app_log_write(APP_LOG_ERROR, "No active IPv4 network");
     }
 
+    bool irrst_supported = false;
+    bool is_n3ds = false;
+    if (R_SUCCEEDED(APT_CheckNew3DS(&is_n3ds)) && is_n3ds) {
+        if (R_SUCCEEDED(irrstInit())) {
+            irrst_supported = true;
+            app_log_write(APP_LOG_INFO, "New 3DS C-Stick (IRRST) initialized");
+        }
+    } else if (R_SUCCEEDED(irrstInit())) {
+        irrst_supported = true;
+        app_log_write(APP_LOG_INFO, "Circle Pad Pro (IRRST) initialized");
+    }
+
     dds_runtime dds;
     dds_runtime_init(&dds);
     dds_runtime_set_log_sink(dds_log_callback, NULL);
@@ -444,6 +469,7 @@ int main(void) {
     int32_t last_writer_qos_rejections = -2;
     int32_t last_reader_qos_rejections = -2;
     int32_t last_imu_matches = -2;
+    int32_t last_joy_matches = -2;
     int32_t last_camera_front_matches = -2;
     int32_t last_camera_back_matches = -2;
     int32_t last_service_request_matches = -2;
@@ -463,6 +489,7 @@ int main(void) {
         bool started = dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                          broadcast_ip_text, config.imu_enabled,
                                          config.imu_acceleration_scale,
+                                         config.joy_enabled,
                                          config.camera_front_enabled,
                                          config.camera_back_enabled,
                                          &config.camera, config.ros_namespace);
@@ -503,6 +530,7 @@ int main(void) {
     bool chatter_topic_enabled = true;
     bool imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
                              dds.imu.writer > DDS_ENTITY_NIL;
+    bool joy_topic_enabled = config.joy_enabled && dds.joy.writer > DDS_ENTITY_NIL;
     bool camera_front_topic_enabled = config.camera_front_enabled && dds.camera.front.writer > DDS_ENTITY_NIL;
     bool camera_back_topic_enabled = config.camera_back_enabled && dds.camera.back.writer > DDS_ENTITY_NIL;
     bool camera_publish_once_pending = false;
@@ -515,15 +543,28 @@ int main(void) {
     u64 next_status_at = 0;
     u64 next_rtps_log_at = 0;
     u64 next_imu_at = osGetTime();
+    u64 next_joy_at = osGetTime();
     u64 next_camera_publish_at = osGetTime();
     const u64 imu_interval_ms = 1000 / config.imu_publish_hz;
+    const u64 joy_interval_ms = 1000 / (config.joy_publish_hz > 0 ? config.joy_publish_hz : 20);
     ddsrt_3ds_socket_stats_t socket_stats;
     memset(&socket_stats, 0, sizeof(socket_stats));
     while (aptMainLoop()) {
         hidScanInput();
+        if (irrst_supported) {
+            irrstScanInput();
+        }
         u32 keys_down = hidKeysDown();
+        u32 keys_held = hidKeysHeld();
+        circlePosition circle;
+        hidCircleRead(&circle);
+        circlePosition cstick = { 0, 0 };
+        if (irrst_supported) {
+            irrstCstickRead(&cstick);
+        }
         touchPosition touch;
         hidTouchRead(&touch);
+        bool is_touching = (keys_held & KEY_TOUCH) != 0;
         ui_action actions = app_ui_handle_input(keys_down, &touch);
         if (actions != 0) {
             app_log_write(APP_LOG_INFO, "UI actions: 0x%08lX", (unsigned long)actions);
@@ -550,6 +591,7 @@ int main(void) {
                     dds_runtime_start(&dds, config.domain_id, config.peer_ip,
                                       broadcast_ip_text, config.imu_enabled,
                                       config.imu_acceleration_scale,
+                                      config.joy_enabled,
                                       config.camera_front_enabled,
                                       config.camera_back_enabled,
                                       &config.camera, config.ros_namespace);
@@ -557,11 +599,13 @@ int main(void) {
                 chatter_topic_enabled = true;
                 imu_topic_enabled = config.imu_enabled && dds.imu.sensors_enabled &&
                                     dds.imu.writer > DDS_ENTITY_NIL;
+                joy_topic_enabled = config.joy_enabled && dds.joy.writer > DDS_ENTITY_NIL;
                 camera_front_topic_enabled = config.camera_front_enabled && dds.camera.front.writer > DDS_ENTITY_NIL;
                 camera_back_topic_enabled = config.camera_back_enabled && dds.camera.back.writer > DDS_ENTITY_NIL;
                 camera_publish_once_pending = false;
                 next_chatter_at = now;
                 next_imu_at = now;
+                next_joy_at = now;
                 next_camera_publish_at = now;
                 next_graph_at = now + GRAPH_REFRESH_MS;
                 app_log_write(restarted ? APP_LOG_INFO : APP_LOG_ERROR,
@@ -578,6 +622,15 @@ int main(void) {
             imu_topic_enabled = !imu_topic_enabled;
             app_log_write(APP_LOG_INFO, "IMU publisher %s",
                           imu_topic_enabled ? "enabled" : "disabled");
+        }
+        if (actions & UI_ACTION_TOGGLE_JOY_TOPIC) {
+            const bool requested = !joy_topic_enabled;
+            if (dds_runtime_set_joy_enabled(&dds, requested)) {
+                joy_topic_enabled = requested;
+                config.joy_enabled = requested;
+                app_log_write(APP_LOG_INFO, "Joy publisher %s",
+                              joy_topic_enabled ? "enabled" : "disabled");
+            }
         }
         if (actions & UI_ACTION_TOGGLE_CAMERA_FRONT_TOPIC) {
             app_log_write(APP_LOG_INFO, "Front Camera toggle");
@@ -606,6 +659,9 @@ int main(void) {
             if (imu_topic_enabled && !dds_runtime_publish_imu(&dds, now)) {
                 app_log_write(APP_LOG_ERROR, "ROS IMU TX failed %s", dds_runtime_error_text(&dds));
             }
+            if (joy_topic_enabled && !dds_runtime_publish_joy(&dds, now, &circle, &cstick, keys_held, &touch, is_touching)) {
+                app_log_write(APP_LOG_ERROR, "ROS Joy TX failed %s", dds_runtime_error_text(&dds));
+            }
             if (camera_front_topic_enabled || camera_back_topic_enabled) {
                 camera_publish_once_pending = true;
             }
@@ -614,6 +670,7 @@ int main(void) {
             chatter_publishing = !chatter_publishing;
             next_chatter_at = now;
             next_imu_at = now;
+            next_joy_at = now;
             next_camera_publish_at = now;
             app_log_write(APP_LOG_INFO, "All topic publishing %s",
                           chatter_publishing ? "started" : "stopped");
@@ -643,6 +700,16 @@ int main(void) {
             do {
                 next_imu_at += imu_interval_ms;
             } while (next_imu_at <= now);
+        }
+        if (chatter_publishing && joy_topic_enabled && dds.running &&
+            dds.joy.writer > DDS_ENTITY_NIL &&
+            now >= next_joy_at) {
+            if (!dds_runtime_publish_joy(&dds, now, &circle, &cstick, keys_held, &touch, is_touching)) {
+                app_log_write(APP_LOG_ERROR, "ROS Joy TX failed %s", dds_runtime_error_text(&dds));
+            }
+            do {
+                next_joy_at += joy_interval_ms;
+            } while (next_joy_at <= now);
         }
         if ((camera_front_topic_enabled || camera_back_topic_enabled) && dds.running) {
             const uint64_t encoded_before = dds.camera.front.encoded + dds.camera.back.encoded;
@@ -691,6 +758,11 @@ int main(void) {
         if (imu_matches != last_imu_matches) {
             app_log_write(APP_LOG_INFO, "ROS IMU writer match count=%ld", (long)imu_matches);
             last_imu_matches = imu_matches;
+        }
+        int32_t joy_matches = dds_runtime_joy_writer_matches(&dds);
+        if (joy_matches != last_joy_matches) {
+            app_log_write(APP_LOG_INFO, "ROS Joy writer match count=%ld", (long)joy_matches);
+            last_joy_matches = joy_matches;
         }
         int32_t camera_front_matches = dds_runtime_camera_front_writer_matches(&dds);
         if (camera_front_matches != last_camera_front_matches) {
@@ -825,6 +897,7 @@ int main(void) {
             .publishing = chatter_publishing,
             .chatter_topic_enabled = chatter_topic_enabled,
             .imu_topic_enabled = imu_topic_enabled,
+            .joy_topic_enabled = joy_topic_enabled,
             .camera_front_topic_enabled = camera_front_topic_enabled,
             .camera_back_topic_enabled = camera_back_topic_enabled,
             .listening = chatter_listening,
@@ -886,6 +959,9 @@ int main(void) {
             .camera_back_writer_matches = camera_back_matches,
             .camera_preview_width = dds.camera.width,
             .camera_preview_height = dds.camera.height,
+            .joy_publish_hz = config.joy_publish_hz,
+            .joy_transmitted = dds_runtime_joy_transmitted(&dds),
+            .joy_writer_matches = joy_matches,
             .add_two_ints_running = dds.add_two_ints.running,
             .add_two_ints_requests_handled = dds.add_two_ints.requests_handled,
             .add_two_ints_request_matches = service_request_matches,
@@ -908,10 +984,15 @@ int main(void) {
             .rtps_last_recv_errno = socket_stats.last_recv_errno,
             .rtps_multicast_if_errno = socket_stats.multicast_if_errno
         };
+        memcpy(snapshot.joy_axes, dds.joy.last_axes, sizeof(snapshot.joy_axes));
+        memcpy(snapshot.joy_buttons, dds.joy.last_buttons, sizeof(snapshot.joy_buttons));
         app_ui_render(&snapshot);
     }
 
     dds_runtime_stop(&dds);
+    if (irrst_supported) {
+        irrstExit();
+    }
     app_log_write(APP_LOG_INFO, "DDS participant stopped rc=%ld", (long)dds.last_result);
     if (state.socket_fd >= 0) {
         if (state.membership_joined) {
